@@ -1851,10 +1851,15 @@ final class APIService {
     )
   }
   
-  func checkForUpdates() async throws -> UpdateCheckResponse {
+  func checkForUpdates(clientCommit: String? = nil) async throws -> UpdateCheckResponse {
+    var queryItems: [URLQueryItem] = []
+    if let commit = clientCommit, !commit.isEmpty, commit != "unknown" {
+      queryItems.append(URLQueryItem(name: "client_commit", value: commit))
+    }
     return try await request(
       method: "GET",
-      path: "/api/status/updates"
+      path: "/api/status/updates",
+      queryItems: queryItems.isEmpty ? nil : queryItems
     )
   }
   

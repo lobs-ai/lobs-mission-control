@@ -812,14 +812,28 @@ private struct UpdatesSection: View {
     }
   }
   
+  /// Get the current app's git commit hash
+  private var currentCommit: String {
+    // Check runtime hash file first (written by bin/build)
+    let hashFile = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Library/Application Support/Lobs/dashboard-build-commit")
+    if let diskHash = try? String(contentsOf: hashFile, encoding: .utf8)
+      .trimmingCharacters(in: .whitespacesAndNewlines),
+       !diskHash.isEmpty {
+      return diskHash
+    }
+    // Fall back to compile-time constant
+    return BuildInfo.builtCommit
+  }
+  
   private func checkUpdates() async {
     isChecking = true
     error = nil
     defer { isChecking = false }
     
     do {
-      let check = try await apiService.checkForUpdates()
-      // Extract Mission Control info (should be the only repo now)
+      let commit = currentCommit
+      let check = try await apiService.checkForUpdates(clientCommit: commit)
       updateInfo = check.repos.first(where: { $0.name == "lobs-mission-control" })
     } catch {
       self.error = "Failed to check updates: \(error.localizedDescription)"
