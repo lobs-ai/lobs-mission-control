@@ -1711,7 +1711,7 @@ private struct ToolbarButton: View {
 // MARK: - Hover Icon Button
 
 /// A toolbar icon button with hover highlight and tooltip.
-private struct HoverIconButton: View {
+struct HoverIconButton: View {
   let icon: String
   let tooltip: String
   var activeBg: Color? = nil
@@ -2291,7 +2291,7 @@ private struct NotificationToast: View {
 
 // MARK: - Board View
 
-private struct BoardView: View {
+struct BoardView: View {
   @ObservedObject var vm: AppViewModel
   @Binding var showAllDone: Bool
   @Binding var showAllRejected: Bool
@@ -4016,7 +4016,7 @@ private struct EditProjectSheet: View {
 
 // MARK: - Add Task Sheet
 
-private struct AddTaskSheet: View {
+struct AddTaskSheet: View {
   @ObservedObject var vm: AppViewModel
   @Binding var autoPush: Bool
 

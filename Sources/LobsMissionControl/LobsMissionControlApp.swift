@@ -15,7 +15,7 @@ struct LobsMissionControlApp: App {
             .environmentObject(vm)
             .environmentObject(orchestrator)
         } else {
-          ContentView()
+          MainView()
             .environmentObject(vm)
             .environmentObject(orchestrator)
             .frame(minWidth: 1100, minHeight: 720)
