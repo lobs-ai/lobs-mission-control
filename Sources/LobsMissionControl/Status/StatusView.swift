@@ -94,6 +94,7 @@ struct StatusView: View {
               ServerCard(server: viewModel.overview?.server)
               OrchestratorCard(
                 orchestrator: viewModel.overview?.orchestrator,
+                workers: viewModel.overview?.workers,
                 onPause: { Task { await viewModel.pauseOrchestrator() } },
                 onResume: { Task { await viewModel.resumeOrchestrator() } }
               )
@@ -222,6 +223,7 @@ private struct ServerCard: View {
 
 private struct OrchestratorCard: View {
   let orchestrator: SystemOverview.OrchestratorStatus?
+  let workers: SystemOverview.WorkersStatus?
   let onPause: () -> Void
   let onResume: () -> Void
   
@@ -242,6 +244,12 @@ private struct OrchestratorCard: View {
         
         if let orchestrator = orchestrator {
           VStack(alignment: .leading, spacing: 8) {
+            // Workers info
+            if let workers = workers {
+              StatRow(label: "Active Workers", value: "\(workers.active)")
+            }
+            
+            // Control button
             HStack(spacing: 8) {
               if orchestrator.running && !orchestrator.paused {
                 Button {

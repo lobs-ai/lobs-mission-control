@@ -23,8 +23,7 @@ struct OnboardingView: View {
 
   enum Step: CaseIterable, Identifiable {
     case welcome
-    case workspace
-    case serverGuide
+    case connect
     case done
 
     var id: String { title }
@@ -32,19 +31,13 @@ struct OnboardingView: View {
     var title: String {
       switch self {
       case .welcome: return "Welcome"
-      case .workspace: return "Workspace"
-      case .serverGuide: return "Server setup"
+      case .connect: return "Connect to Server"
       case .done: return "Done"
       }
     }
 
     var isOptional: Bool {
-      switch self {
-      case .serverGuide:
-        return true
-      default:
-        return false
-      }
+      return false  // All steps are required
     }
 
     var stepIndex1Based: Int {
@@ -54,8 +47,7 @@ struct OnboardingView: View {
     var onboardingID: OnboardingStepID? {
       switch self {
       case .welcome: return .welcome
-      case .workspace: return .workspace
-      case .serverGuide: return .serverGuide
+      case .connect: return .connect
       case .done: return .done
       }
     }
@@ -225,26 +217,26 @@ struct OnboardingView: View {
     case .welcome:
       OnboardingWelcomeView()
 
-    case .workspace:
-      OnboardingWorkspaceView(initialWorkspace: workspacePath) { path in
-        workspacePath = path
-        onboardingState.workspace = path
-        markCompleted(.workspace)
+    case .connect:
+      OnboardingConnectView { serverURL, apiToken in
+        // Save the server URL and API token to config
+        if var config = vm.config {
+          config.serverURL = serverURL
+          config.apiToken = apiToken
+          vm.config = config
+          try? ConfigManager.save(config)
+        } else {
+          let newConfig = AppConfig(
+            serverURL: serverURL,
+            apiToken: apiToken
+          )
+          vm.config = newConfig
+          try? ConfigManager.save(newConfig)
+        }
+        
+        markCompleted(.connect)
         advance()
       }
-
-    case .serverGuide:
-      OnboardingServerGuideView()
-        .onAppear {
-          wizard.configureNext(title: "Next", enabled: true) {
-            markCompleted(.serverGuide)
-            advance()
-          }
-          wizard.configureSkip(shown: true, title: "Skip for now", enabled: true) {
-            markCompleted(.serverGuide)
-            advance()
-          }
-        }
 
     case .done:
       OnboardingDoneView {
@@ -288,8 +280,7 @@ struct OnboardingView: View {
 
   private func firstIncompleteStep(state: OnboardingState) -> Step {
     if !state.isCompleted(.welcome) { return .welcome }
-    if !state.isCompleted(.workspace) { return .workspace }
-    if !state.isCompleted(.serverGuide) { return .serverGuide }
+    if !state.isCompleted(.connect) { return .connect }
     return .done
   }
 

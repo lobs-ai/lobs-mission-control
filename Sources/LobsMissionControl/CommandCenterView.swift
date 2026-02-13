@@ -20,6 +20,7 @@ struct CommandCenterView: View {
   @State private var whileYouWereAwayExpanded = false
   @State private var upcomingEvents: [ScheduledEvent] = []
   @State private var recentMemories: [MemoryItem] = []
+  @State private var showNewTaskSheet = false
   
   private var lastVisit: Date {
     Date(timeIntervalSince1970: lastVisitTimestamp)
@@ -125,7 +126,7 @@ struct CommandCenterView: View {
                 icon: "plus.circle.fill",
                 label: "New Task",
                 color: .blue,
-                action: { onNewTask?() }
+                action: { showNewTaskSheet = true }
               )
               
               QuickActionButton(
@@ -239,6 +240,9 @@ struct CommandCenterView: View {
     }
     .onDisappear {
       lastVisitTimestamp = Date().timeIntervalSince1970
+    }
+    .sheet(isPresented: $showNewTaskSheet) {
+      NewTaskSheet(vm: vm, isPresented: $showNewTaskSheet)
     }
   }
   
@@ -1071,5 +1075,185 @@ private struct HomeCardContainer<Content: View>: View {
           .stroke(Color.primary.opacity(0.08), lineWidth: 1)
       )
       .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+  }
+}
+
+// MARK: - New Task Sheet
+
+private struct NewTaskSheet: View {
+  @ObservedObject var vm: AppViewModel
+  @Binding var isPresented: Bool
+  
+  @State private var title = ""
+  @State private var selectedProjectId: String? = nil
+  @State private var notes = ""
+  @State private var isCreating = false
+  @State private var errorMessage: String?
+  
+  var body: some View {
+    VStack(spacing: 0) {
+      // Header
+      HStack {
+        Text("New Task")
+          .font(.title2.bold())
+        
+        Spacer()
+        
+        Button {
+          isPresented = false
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title3)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding()
+      .background(Color(NSColor.windowBackgroundColor))
+      
+      Divider()
+      
+      // Form
+      ScrollView {
+        VStack(alignment: .leading, spacing: 20) {
+          // Title field
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Title")
+              .font(.subheadline.bold())
+            TextField("What needs to be done?", text: $title)
+              .textFieldStyle(.plain)
+              .padding(10)
+              .background(Color(NSColor.controlBackgroundColor))
+              .clipShape(RoundedRectangle(cornerRadius: 8))
+              .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                  .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+              )
+          }
+          
+          // Project picker
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Project")
+              .font(.subheadline.bold())
+            
+            Picker("Select Project", selection: $selectedProjectId) {
+              Text("No Project").tag(nil as String?)
+              
+              ForEach(vm.sortedActiveProjects, id: \.id) { project in
+                Text(project.name).tag(project.id as String?)
+              }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(Color(NSColor.controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+              RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            )
+          }
+          
+          // Notes field
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Notes (Optional)")
+              .font(.subheadline.bold())
+            
+            TextEditor(text: $notes)
+              .font(.body)
+              .frame(minHeight: 100)
+              .padding(8)
+              .background(Color(NSColor.controlBackgroundColor))
+              .clipShape(RoundedRectangle(cornerRadius: 8))
+              .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                  .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+              )
+          }
+          
+          // Error message
+          if let error = errorMessage {
+            HStack(spacing: 8) {
+              Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+              Text(error)
+                .font(.caption)
+                .foregroundStyle(.red)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.red.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+          }
+        }
+        .padding()
+      }
+      
+      Divider()
+      
+      // Footer buttons
+      HStack(spacing: 12) {
+        Button("Cancel") {
+          isPresented = false
+        }
+        .keyboardShortcut(.escape)
+        
+        Spacer()
+        
+        Button {
+          createTask()
+        } label: {
+          HStack(spacing: 6) {
+            if isCreating {
+              ProgressView()
+                .scaleEffect(0.7)
+                .frame(width: 14, height: 14)
+            }
+            Text("Create Task")
+          }
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(title.isEmpty || isCreating)
+        .keyboardShortcut(.return)
+      }
+      .padding()
+      .background(Color(NSColor.windowBackgroundColor))
+    }
+    .frame(width: 500, height: 500)
+    .background(Color(NSColor.controlBackgroundColor))
+  }
+  
+  private func createTask() {
+    guard !title.isEmpty else { return }
+    
+    isCreating = true
+    errorMessage = nil
+    
+    Task {
+      do {
+        let _ = try await vm.api.addTask(
+          title: title,
+          owner: .lobs,
+          status: .inbox,
+          projectId: selectedProjectId,
+          workState: .notStarted,
+          reviewState: .pending,
+          notes: notes.isEmpty ? nil : notes
+        )
+        
+        // Reload tasks
+        await vm.loadTasks()
+        
+        // Close sheet on success
+        await MainActor.run {
+          isPresented = false
+        }
+      } catch {
+        await MainActor.run {
+          errorMessage = error.localizedDescription
+          isCreating = false
+        }
+      }
+    }
   }
 }

@@ -36,13 +36,14 @@ struct OnboardingState: Codable, Equatable {
 enum OnboardingStepID: String, CaseIterable {
   case welcome
   case prereqs  // Legacy, kept for compatibility
-  case workspace
+  case workspace  // Legacy
   case installOpenClaw  // Legacy
   case configureOpenClaw  // Legacy
   case agentSetup  // Legacy
   case startOrchestrator  // Legacy
   case firstProject  // Legacy
-  case serverGuide
+  case serverGuide  // Legacy
+  case connect  // NEW: Server connection step
   case done
 }
 

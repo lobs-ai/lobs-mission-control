@@ -674,6 +674,150 @@ final class APIService {
     )
   }
   
+  func fetchTodayEvents() async throws -> [ScheduledEvent] {
+    return try await request(
+      method: "GET",
+      path: "/api/calendar/today"
+    )
+  }
+  
+  func fetchCalendarRange(start: Date, end: Date) async throws -> [ScheduledEvent] {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    
+    return try await request(
+      method: "GET",
+      path: "/api/calendar/range",
+      queryItems: [
+        URLQueryItem(name: "start", value: formatter.string(from: start)),
+        URLQueryItem(name: "end", value: formatter.string(from: end))
+      ]
+    )
+  }
+  
+  func createEvent(
+    title: String,
+    description: String?,
+    eventType: String,
+    scheduledAt: Date,
+    endAt: Date?,
+    allDay: Bool,
+    recurrenceRule: String?,
+    targetType: String,
+    targetAgent: String?
+  ) async throws -> ScheduledEvent {
+    struct EventCreate: Codable {
+      let id: String
+      let title: String
+      let description: String?
+      let eventType: String
+      let scheduledAt: Date
+      let endAt: Date?
+      let allDay: Bool
+      let recurrenceRule: String?
+      let recurrenceEnd: Date?
+      let targetType: String
+      let targetAgent: String?
+      let taskProjectId: String?
+      let taskNotes: String?
+      let taskPriority: String?
+      
+      enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case eventType = "event_type"
+        case scheduledAt = "scheduled_at"
+        case endAt = "end_at"
+        case allDay = "all_day"
+        case recurrenceRule = "recurrence_rule"
+        case recurrenceEnd = "recurrence_end"
+        case targetType = "target_type"
+        case targetAgent = "target_agent"
+        case taskProjectId = "task_project_id"
+        case taskNotes = "task_notes"
+        case taskPriority = "task_priority"
+      }
+    }
+    
+    let create = EventCreate(
+      id: UUID().uuidString,
+      title: title,
+      description: description,
+      eventType: eventType,
+      scheduledAt: scheduledAt,
+      endAt: endAt,
+      allDay: allDay,
+      recurrenceRule: recurrenceRule,
+      recurrenceEnd: nil,
+      targetType: targetType,
+      targetAgent: targetAgent,
+      taskProjectId: nil,
+      taskNotes: nil,
+      taskPriority: nil
+    )
+    
+    return try await request(
+      method: "POST",
+      path: "/api/calendar/events",
+      body: create
+    )
+  }
+  
+  func updateEvent(
+    id: String,
+    title: String?,
+    description: String?,
+    eventType: String?,
+    scheduledAt: Date?,
+    endAt: Date?,
+    allDay: Bool?,
+    status: String?
+  ) async throws -> ScheduledEvent {
+    struct EventUpdate: Codable {
+      let title: String?
+      let description: String?
+      let eventType: String?
+      let scheduledAt: Date?
+      let endAt: Date?
+      let allDay: Bool?
+      let status: String?
+      
+      enum CodingKeys: String, CodingKey {
+        case title
+        case description
+        case eventType = "event_type"
+        case scheduledAt = "scheduled_at"
+        case endAt = "end_at"
+        case allDay = "all_day"
+        case status
+      }
+    }
+    
+    let update = EventUpdate(
+      title: title,
+      description: description,
+      eventType: eventType,
+      scheduledAt: scheduledAt,
+      endAt: endAt,
+      allDay: allDay,
+      status: status
+    )
+    
+    return try await request(
+      method: "PUT",
+      path: "/api/calendar/events/\(id)",
+      body: update
+    )
+  }
+  
+  func deleteEvent(id: String) async throws {
+    try await requestVoid(
+      method: "DELETE",
+      path: "/api/calendar/events/\(id)"
+    )
+  }
+  
   // MARK: - Templates
   
   func loadTemplates() async throws -> [TaskTemplate] {
