@@ -55,6 +55,7 @@ struct ContentView: View {
   @State private var showDocuments = false
   @State private var showChat = false
   @State private var showMemory = false
+  @State private var showStatus = false
   @State private var memoryViewModel: MemoryViewModel?
   @State private var showAllDone = false
   @State private var showAllRejected = false
@@ -88,6 +89,7 @@ struct ContentView: View {
           showDocuments: $showDocuments,
           showChat: $showChat,
           showMemory: $showMemory,
+          showStatus: $showStatus,
           showTemplates: $showTemplates,
           showHelp: $showHelp,
           showTextDump: $showTextDump,
@@ -104,7 +106,7 @@ struct ContentView: View {
         // Content fills remaining space below the pinned header
         Group {
           if vm.showOverview {
-            OverviewView(
+            CommandCenterView(
               vm: vm,
               onSelectProject: { projectId in
                 vm.selectedProjectId = projectId
@@ -117,17 +119,21 @@ struct ContentView: View {
                 inboxInitialItemId = itemId
                 withAnimation(.easeInOut(duration: 0.25)) { showInbox = true }
               },
-              onOpenAIUsage: {
-                withAnimation(.easeInOut(duration: 0.25)) { showAIUsage = true }
+              onOpenMemory: {
+                withAnimation(.easeInOut(duration: 0.25)) { showMemory = true }
               },
-              onOpenHelp: {
-                withAnimation(.easeInOut(duration: 0.25)) { showHelp = true }
+              onOpenStatus: {
+                withAnimation(.easeInOut(duration: 0.25)) { showStatus = true }
               },
-              onOpenOnboarding: {
-                showOnboarding = true
+              onStartResearch: {
+                // Find first research project or create one
+                if let researchProject = vm.sortedActiveProjects.first(where: { $0.resolvedType == .research }) {
+                  vm.selectedProjectId = researchProject.id
+                  vm.showOverview = false
+                }
               },
-              onOpenCommandPalette: {
-                withAnimation(.easeInOut(duration: 0.25)) { showCommandPalette = true }
+              onOpenChat: {
+                withAnimation(.easeInOut(duration: 0.25)) { showChat = true }
               }
             )
           } else if vm.isResearchProject {
@@ -302,18 +308,19 @@ struct ContentView: View {
           }
           .buttonStyle(.plain)
           .help("Keyboard Shortcuts (⌘/)")
-          .opacity(showInbox || showDocuments || showChat || showMemory || showHelp ? 0 : 0.7)
+          .opacity(showInbox || showDocuments || showChat || showMemory || showStatus || showHelp ? 0 : 0.7)
           .animation(.easeInOut(duration: 0.15), value: showInbox)
           .animation(.easeInOut(duration: 0.15), value: showDocuments)
           .animation(.easeInOut(duration: 0.15), value: showChat)
           .animation(.easeInOut(duration: 0.15), value: showMemory)
+          .animation(.easeInOut(duration: 0.15), value: showStatus)
           .animation(.easeInOut(duration: 0.15), value: showHelp)
         }
         .padding(.trailing, 16)
         .padding(.bottom, 12)
       }
       .zIndex(50)
-      .allowsHitTesting(!showInbox && !showDocuments && !showChat && !showMemory && !showHelp && !showAIUsage)
+      .allowsHitTesting(!showInbox && !showDocuments && !showChat && !showMemory && !showStatus && !showHelp && !showAIUsage)
 
       // Inbox overlay — clicking outside dismisses (Task #479271CB)
       if showInbox {
@@ -391,6 +398,24 @@ struct ContentView: View {
           .onExitCommand { withAnimation(.easeInOut(duration: 0.25)) { showMemory = false } }
           .transition(.opacity.combined(with: .scale(scale: 0.95)))
           .zIndex(207)
+      }
+      
+      // Status overlay — clicking outside dismisses
+      if showStatus {
+        Color.black.opacity(0.3)
+          .ignoresSafeArea()
+          .onTapGesture { withAnimation(.easeInOut(duration: 0.25)) { showStatus = false } }
+          .transition(.opacity)
+          .zIndex(208)
+
+        StatusView(apiService: vm.api, isPresented: $showStatus)
+          .frame(minWidth: 1000, idealWidth: 1200, minHeight: 700, idealHeight: 800)
+          .clipShape(RoundedRectangle(cornerRadius: 16))
+          .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
+          .padding(40)
+          .onExitCommand { withAnimation(.easeInOut(duration: 0.25)) { showStatus = false } }
+          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+          .zIndex(209)
       }
 
       // AI Usage overlay — clicking outside dismisses (Task #2EB50767)
@@ -589,6 +614,7 @@ struct ContentView: View {
           if showAIUsage { withAnimation(.easeInOut(duration: 0.25)) { showAIUsage = false }; return true }
           if showInbox { withAnimation(.easeInOut(duration: 0.25)) { showInbox = false }; return true }
           if showMemory { withAnimation(.easeInOut(duration: 0.25)) { showMemory = false }; return true }
+          if showStatus { withAnimation(.easeInOut(duration: 0.25)) { showStatus = false }; return true }
           if showSettings { showSettings = false; return true }
           if showHelp { withAnimation(.easeInOut(duration: 0.25)) { showHelp = false }; return true }
           if vm.popoverTaskId != nil { vm.popoverTaskId = nil; return true }
@@ -973,6 +999,7 @@ private struct ToolbarArea: View {
   @Binding var showDocuments: Bool
   @Binding var showChat: Bool
   @Binding var showMemory: Bool
+  @Binding var showStatus: Bool
   @Binding var showTemplates: Bool
   @Binding var showHelp: Bool
   @Binding var showTextDump: Bool
@@ -1451,6 +1478,19 @@ private struct ToolbarArea: View {
       }
       .buttonStyle(.plain)
       .help("Memory")
+      
+      // Status button
+      Button {
+        withAnimation(.easeInOut(duration: 0.25)) { showStatus = true }
+      } label: {
+        Image(systemName: "chart.bar.fill")
+          .font(.body)
+          .padding(6)
+          .background(Theme.subtle)
+          .clipShape(RoundedRectangle(cornerRadius: 8))
+      }
+      .buttonStyle(.plain)
+      .help("System Status")
 
       // Templates button
       if !vm.templates.isEmpty {
