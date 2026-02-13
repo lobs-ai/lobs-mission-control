@@ -19,6 +19,7 @@ final class ChatViewModel: ObservableObject {
     private let chatService: ChatService
     private let apiService: APIService
     private var cancellables = Set<AnyCancellable>()
+    private var hasConnected = false
     
     // MARK: - Initialization
     
@@ -30,6 +31,17 @@ final class ChatViewModel: ObservableObject {
     }
     
     // MARK: - Public API
+    
+    func connectIfNeeded() {
+        guard !hasConnected else { return }
+        hasConnected = true
+        let serverURL = apiService.baseURL.absoluteString
+        chatService.connect(serverURL: serverURL, sessionKey: currentSessionKey, apiToken: apiService.apiToken)
+        loadSessions()
+        
+        // Load initial history
+        Task { await loadHistory() }
+    }
     
     func connect(serverURL: String) {
         chatService.connect(serverURL: serverURL, sessionKey: currentSessionKey, apiToken: apiService.apiToken)

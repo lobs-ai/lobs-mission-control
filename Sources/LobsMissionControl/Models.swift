@@ -647,6 +647,7 @@ enum DocumentStatus: String, Codable, Hashable {
   case pending
   case approved
   case rejected
+  case archived
 }
 
 struct AgentDocument: Identifiable, Hashable, Codable {

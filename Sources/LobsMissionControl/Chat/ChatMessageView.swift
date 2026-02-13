@@ -29,14 +29,24 @@ struct ChatMessageView: View {
                 } else {
                     // User and assistant messages: bubbles
                     VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                        Text(message.content)
-                            .font(.body)
-                            .foregroundColor(textColor)
-                            .textSelection(.enabled)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(bubbleColor)
-                            .cornerRadius(16)
+                        if message.role == .assistant && containsMarkdown(message.content) {
+                            // Render markdown for assistant messages
+                            SelfSizingMarkdownView(markdown: message.content)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(bubbleColor)
+                                .cornerRadius(16)
+                        } else {
+                            // Plain text for user messages or simple assistant messages
+                            Text(message.content)
+                                .font(.body)
+                                .foregroundColor(textColor)
+                                .textSelection(.enabled)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(bubbleColor)
+                                .cornerRadius(16)
+                        }
                         
                         Text(relativeTimestamp)
                             .font(.caption2)
@@ -113,5 +123,23 @@ struct ChatMessageView: View {
             let days = Int(interval / 86400)
             return "\(days)d ago"
         }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func containsMarkdown(_ text: String) -> Bool {
+        // Check for common markdown patterns
+        let patterns = [
+            "```",           // Code blocks
+            "##",            // Headers
+            "**",            // Bold
+            "- ",            // Lists
+            "* ",            // Lists
+            "1. ",           // Ordered lists
+            "`",             // Inline code
+            "[",             // Links
+            "> "             // Blockquotes
+        ]
+        return patterns.contains { text.contains($0) }
     }
 }

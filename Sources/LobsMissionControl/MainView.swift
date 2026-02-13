@@ -62,8 +62,22 @@ struct MainView: View {
     // Sidebar: list of sections with icons
     var sidebarContent: some View {
         List(MainSidebarSection.allCases, selection: $selectedSection) { section in
-            Label(section.rawValue, systemImage: section.icon)
-                .tag(section)
+            HStack {
+                Label(section.rawValue, systemImage: section.icon)
+                Spacer()
+                
+                // Show unread badge for inbox
+                if section == .inbox && vm.unreadInboxCount > 0 {
+                    Text("\(vm.unreadInboxCount)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue)
+                        .clipShape(Capsule())
+                }
+            }
+            .tag(section)
         }
         .listStyle(.sidebar)
         .frame(minWidth: 180)

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AgentCardView: View {
   let agent: AgentStatus
+  @State private var isExpanded: Bool = false
   
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -115,6 +116,14 @@ struct AgentCardView: View {
       RoundedRectangle(cornerRadius: 12)
         .strokeBorder(borderColor, lineWidth: 1)
     )
+    .onTapGesture {
+      withAnimation {
+        isExpanded.toggle()
+      }
+    }
+    .popover(isPresented: $isExpanded) {
+      AgentDetailPopover(agent: agent)
+    }
   }
   
   private var borderColor: Color {
@@ -263,6 +272,194 @@ private struct StatItem: View {
       Text(label)
         .font(.caption2)
         .foregroundStyle(.secondary)
+    }
+  }
+}
+
+// MARK: - Agent Detail Popover
+
+private struct AgentDetailPopover: View {
+  let agent: AgentStatus
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      // Header
+      HStack(spacing: 12) {
+        Text(agent.emoji)
+          .font(.system(size: 48))
+        
+        VStack(alignment: .leading, spacing: 4) {
+          Text(agent.displayName)
+            .font(.title2)
+            .fontWeight(.bold)
+          
+          HStack(spacing: 6) {
+            Circle()
+              .fill(statusColor(agent.status))
+              .frame(width: 8, height: 8)
+            Text(agent.status.capitalized)
+              .font(.subheadline)
+              .foregroundStyle(statusColor(agent.status))
+          }
+        }
+        
+        Spacer()
+      }
+      
+      Divider()
+      
+      // Current Activity Section
+      if let activity = agent.activity, !activity.isEmpty {
+        VStack(alignment: .leading, spacing: 6) {
+          Label("Current Activity", systemImage: "bolt.fill")
+            .font(.headline)
+            .foregroundStyle(.blue)
+          
+          Text(activity)
+            .font(.body)
+            .foregroundStyle(.primary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.blue.opacity(0.06))
+        .cornerRadius(8)
+      }
+      
+      // Current Task
+      if let taskId = agent.currentTaskId {
+        VStack(alignment: .leading, spacing: 6) {
+          Label("Current Task", systemImage: "checkmark.circle.fill")
+            .font(.headline)
+            .foregroundStyle(.green)
+          
+          Text(taskId)
+            .font(.system(size: 13, design: .monospaced))
+            .foregroundStyle(.secondary)
+          
+          if let projectId = agent.currentProjectId {
+            HStack(spacing: 4) {
+              Text("Project:")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+              Text(projectId)
+                .font(.caption)
+                .fontWeight(.medium)
+            }
+          }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.green.opacity(0.06))
+        .cornerRadius(8)
+      }
+      
+      // Statistics
+      if let stats = agent.stats {
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Performance")
+            .font(.headline)
+          
+          Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 12) {
+            GridRow {
+              Label("Completed", systemImage: "checkmark.circle")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+              Text("\(stats.tasksCompleted ?? 0)")
+                .font(.system(.title3, design: .rounded).weight(.semibold))
+              Spacer()
+            }
+            
+            GridRow {
+              Label("Failed", systemImage: "xmark.circle")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+              Text("\(stats.tasksFailed ?? 0)")
+                .font(.system(.title3, design: .rounded).weight(.semibold))
+                .foregroundStyle(stats.tasksFailed ?? 0 > 0 ? .red : .primary)
+              Spacer()
+            }
+            
+            if let avgDuration = stats.avgDurationSeconds {
+              GridRow {
+                Label("Avg Duration", systemImage: "clock")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                Text(formatDuration(avgDuration))
+                  .font(.system(.title3, design: .rounded).weight(.semibold))
+                Spacer()
+              }
+            }
+          }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(8)
+      }
+      
+      // Recent Activity
+      if let lastCompletedAt = agent.lastCompletedAt {
+        HStack(spacing: 6) {
+          Image(systemName: "clock.arrow.circlepath")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          Text("Last completed \(timeAgo(lastCompletedAt))")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+      
+      if let lastActiveAt = agent.lastActiveAt {
+        HStack(spacing: 6) {
+          Image(systemName: "clock")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          Text("Last active \(timeAgo(lastActiveAt))")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+    }
+    .padding(20)
+    .frame(width: 450)
+  }
+  
+  private func statusColor(_ status: String) -> Color {
+    switch status {
+    case "working": return .blue
+    case "thinking": return .purple
+    case "error": return .red
+    default: return .secondary
+    }
+  }
+  
+  private func formatDuration(_ seconds: Int) -> String {
+    if seconds < 60 {
+      return "\(seconds)s"
+    } else if seconds < 3600 {
+      return "\(seconds / 60)m"
+    } else {
+      let hours = seconds / 3600
+      let mins = (seconds % 3600) / 60
+      return mins > 0 ? "\(hours)h \(mins)m" : "\(hours)h"
+    }
+  }
+  
+  private func timeAgo(_ date: Date) -> String {
+    let now = Date()
+    let diff = now.timeIntervalSince(date)
+    
+    if diff < 60 {
+      return "just now"
+    } else if diff < 3600 {
+      let mins = Int(diff / 60)
+      return "\(mins)m ago"
+    } else if diff < 86400 {
+      let hours = Int(diff / 3600)
+      return "\(hours)h ago"
+    } else {
+      let days = Int(diff / 86400)
+      return "\(days)d ago"
     }
   }
 }
