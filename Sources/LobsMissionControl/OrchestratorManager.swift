@@ -43,6 +43,16 @@ final class OrchestratorManager: ObservableObject {
 
   /// Server URL for API calls (loaded from AppConfig)
   var serverURL: String = "http://localhost:8000"
+  /// API token for authenticated requests
+  var apiToken: String = ""
+
+  private func authenticatedRequest(url: URL) -> URLRequest {
+    var request = URLRequest(url: url)
+    if !apiToken.isEmpty {
+      request.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
+    }
+    return request
+  }
 
   private var monitorTask: Task<Void, Never>? = nil
 
@@ -103,7 +113,8 @@ final class OrchestratorManager: ObservableObject {
     }
     
     do {
-      let (data, response) = try await URLSession.shared.data(from: url)
+      let req = authenticatedRequest(url: url)
+      let (data, response) = try await URLSession.shared.data(for: req)
       guard let httpResponse = response as? HTTPURLResponse else {
         status = .error(message: "Invalid response")
         return
@@ -142,7 +153,8 @@ final class OrchestratorManager: ObservableObject {
     }
     
     do {
-      let (data, _) = try await URLSession.shared.data(from: url)
+      let req = authenticatedRequest(url: url)
+      let (data, _) = try await URLSession.shared.data(for: req)
       if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
          let uptimeSeconds = json["uptime"] as? Double {
         uptimeText = formatUptime(seconds: Int(uptimeSeconds))
@@ -171,7 +183,7 @@ final class OrchestratorManager: ObservableObject {
       return
     }
     
-    var request = URLRequest(url: url)
+    var request = authenticatedRequest(url: url)
     request.httpMethod = method
     
     do {

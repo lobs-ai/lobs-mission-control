@@ -1,0 +1,1 @@
+Task completed in ~/lobs-dashboard-v2 (feature/api-integration branch). API migration from git to REST was already complete from previous sessions. Verified and documented final status in API_MIGRATION_FINAL_STATUS.md. All core functionality now API-driven via lobs-server.

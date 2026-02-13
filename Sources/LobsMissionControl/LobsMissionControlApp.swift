@@ -23,6 +23,7 @@ struct LobsMissionControlApp: App {
       }
       .onAppear {
         orchestrator.serverURL = vm.config?.serverURL ?? "http://localhost:8000"
+        orchestrator.apiToken = vm.config?.apiToken ?? ""
         orchestrator.startMonitoring()
 
         // Register global quick capture hotkey (⌘⇧Space)
