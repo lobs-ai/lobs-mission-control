@@ -1,0 +1,794 @@
+import SwiftUI
+
+private typealias ATheme = Theme
+
+/// Cumulative/daily AI usage view combining worker runs and main session usage.
+struct AIUsageView: View {
+  @ObservedObject var vm: AppViewModel
+  @Binding var isPresented: Bool
+  @Environment(\.dismiss) private var dismiss
+
+  @State private var selectedRange: DateRange = .week
+
+  enum DateRange: String, CaseIterable {
+    case today = "Today"
+    case week = "Week"
+    case month = "Month"
+    case allTime = "All Time"
+  }
+
+  // MARK: - Computed Data
+
+  private var workerRuns: [WorkerHistoryRun] {
+    vm.workerHistory?.runs ?? []
+  }
+
+  private var mainUsage: MainSessionUsage? {
+    vm.mainSessionUsage
+  }
+
+  private var dateFilter: (Date) -> Bool {
+    let cal = Calendar.current
+    let now = Date()
+    switch selectedRange {
+    case .today:
+      return { cal.isDateInToday($0) }
+    case .week:
+      let start = cal.dateInterval(of: .weekOfYear, for: now)?.start ?? .distantPast
+      return { $0 >= start }
+    case .month:
+      let start = cal.dateInterval(of: .month, for: now)?.start ?? .distantPast
+      return { $0 >= start }
+    case .allTime:
+      return { _ in true }
+    }
+  }
+
+  private var filteredWorkerRuns: [WorkerHistoryRun] {
+    workerRuns.filter { run in
+      guard let ended = run.endedAt else { return false }
+      return dateFilter(ended)
+    }
+  }
+
+  private var workerTotalCost: Double {
+    filteredWorkerRuns.reduce(0.0) { $0 + ($1.totalCostUSD ?? 0) }
+  }
+
+  private var workerTotalTokens: Int {
+    filteredWorkerRuns.reduce(0) { $0 + ($1.totalTokens ?? (($1.inputTokens ?? 0) + ($1.outputTokens ?? 0))) }
+  }
+
+  private var workerInputTokens: Int {
+    filteredWorkerRuns.reduce(0) { $0 + ($1.inputTokens ?? 0) }
+  }
+
+  private var workerOutputTokens: Int {
+    filteredWorkerRuns.reduce(0) { $0 + ($1.outputTokens ?? 0) }
+  }
+
+  // Main session usage is no longer tracked - all usage comes from worker history
+  private var mainSessionCost: Double { 0 }
+  private var mainSessionTokens: Int { 0 }
+  private var mainSessionInputTokens: Int { 0 }
+  private var mainSessionOutputTokens: Int { 0 }
+  private var isMainSessionStale: Bool { false }
+
+  private var totalCost: Double { workerTotalCost }
+  private var totalTokens: Int { workerTotalTokens }
+
+  /// Daily cost data from worker runs.
+  private var dailyCosts: [DailyUsagePoint] {
+    var byDay: [String: (cost: Double, tokens: Int)] = [:]
+
+    // Worker runs grouped by day
+    for run in filteredWorkerRuns {
+      guard let ended = run.endedAt else { continue }
+      let day = dayKey(ended)
+      byDay[day, default: (0, 0)].cost += run.totalCostUSD ?? 0
+      byDay[day, default: (0, 0)].tokens += run.totalTokens ?? 0
+    }
+
+    return byDay.map { day, data in
+      DailyUsagePoint(day: day, workerCost: data.cost, mainCost: 0, workerTokens: data.tokens, mainTokens: 0)
+    }
+    .sorted { $0.day < $1.day }
+  }
+
+  /// Model breakdown from worker runs.
+  private var modelBreakdown: [(String, Int, Double)] {
+    var byModel: [String: (tokens: Int, cost: Double)] = [:]
+    for run in filteredWorkerRuns {
+      let model = run.model ?? "unknown"
+      let tokens = run.totalTokens ?? 0
+      let cost = run.totalCostUSD ?? 0
+      byModel[model, default: (0, 0)].tokens += tokens
+      byModel[model, default: (0, 0)].cost += cost
+    }
+    return byModel.map { ($0.key, $0.value.tokens, $0.value.cost) }
+      .sorted { $0.2 > $1.2 }
+  }
+  
+  /// Agent type breakdown from worker runs.
+  private var agentBreakdown: [(String, Int, Int, Double)] {
+    var byAgent: [String: (runs: Int, tokens: Int, cost: Double)] = [:]
+    for run in filteredWorkerRuns {
+      let agent = run.agentType
+      let tokens = run.totalTokens ?? 0
+      let cost = run.totalCostUSD ?? 0
+      byAgent[agent, default: (0, 0, 0)].runs += 1
+      byAgent[agent, default: (0, 0, 0)].tokens += tokens
+      byAgent[agent, default: (0, 0, 0)].cost += cost
+    }
+    return byAgent.map { ($0.key, $0.value.runs, $0.value.tokens, $0.value.cost) }
+      .sorted { $0.3 > $1.3 }  // Sort by cost descending
+  }
+  
+  /// Project breakdown from worker runs (using taskLog data).
+  private var projectBreakdown: [(String, Int, Int, Double)] {
+    var byProject: [String: (runs: Int, tokens: Int, cost: Double)] = [:]
+    for run in filteredWorkerRuns {
+      let project = run.primaryProject ?? "unknown"
+      let tokens = run.totalTokens ?? 0
+      let cost = run.totalCostUSD ?? 0
+      byProject[project, default: (0, 0, 0)].runs += 1
+      byProject[project, default: (0, 0, 0)].tokens += tokens
+      byProject[project, default: (0, 0, 0)].cost += cost
+    }
+    return byProject.map { ($0.key, $0.value.runs, $0.value.tokens, $0.value.cost) }
+      .sorted { $0.3 > $1.3 }  // Sort by cost descending
+  }
+
+  // MARK: - Helpers
+
+  private func dayKey(_ date: Date) -> String {
+    let df = DateFormatter()
+    df.dateFormat = "yyyy-MM-dd"
+    df.timeZone = TimeZone(identifier: "America/New_York")
+    return df.string(from: date)
+  }
+
+  private func shortDay(_ day: String) -> String {
+    // "2026-02-03" → "Feb 3"
+    let df = DateFormatter()
+    df.dateFormat = "yyyy-MM-dd"
+    guard let date = df.date(from: day) else { return day }
+    let out = DateFormatter()
+    out.dateFormat = "MMM d"
+    return out.string(from: date)
+  }
+  
+  private func formatDate(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .none
+    formatter.timeZone = TimeZone(identifier: "America/New_York")
+    return formatter.string(from: date)
+  }
+
+  // MARK: - Body
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 28) {
+        // Header
+        HStack(spacing: 12) {
+          Image(systemName: "chart.line.uptrend.xyaxis")
+            .font(.title)
+            .foregroundStyle(.linearGradient(
+              colors: [.purple, .pink],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            ))
+          Text("AI Usage")
+            .font(.title)
+            .fontWeight(.bold)
+
+          Spacer()
+
+          Picker("Period", selection: $selectedRange) {
+            ForEach(DateRange.allCases, id: \.self) { r in
+              Text(r.rawValue).tag(r)
+            }
+          }
+          .pickerStyle(.segmented)
+          .frame(maxWidth: 320)
+        }
+        
+        // Summary cards
+        HStack(spacing: 16) {
+          UsageSummaryCard(title: "Total Tokens", value: formatTokens(totalTokens), icon: "cpu", color: .indigo,
+            tooltip: "Combined input + output tokens across all worker sessions")
+          UsageSummaryCard(title: "Worker Runs", value: "\(filteredWorkerRuns.count)", icon: "arrow.triangle.2.circlepath", color: .purple,
+            tooltip: "Number of worker agent sessions in this period")
+          UsageSummaryCard(title: "Input Tokens", value: formatTokens(workerInputTokens), icon: "arrow.down.circle.fill", color: .blue,
+            tooltip: "Tokens sent to the AI (prompts, context, instructions)")
+          UsageSummaryCard(title: "Output Tokens", value: formatTokens(workerOutputTokens), icon: "arrow.up.circle.fill", color: .green,
+            tooltip: "Tokens generated by the AI (responses, code, analysis)")
+          UsageSummaryCard(title: "Total Cost", value: String(format: "$%.2f", totalCost), icon: "dollarsign.circle.fill", color: .mint,
+            tooltip: "Estimated total cost based on model pricing.\nOpus: $15/$75 per 1M in/out\nSonnet: $3/$15 per 1M in/out")
+        }
+
+        // Daily usage chart
+        if !dailyCosts.isEmpty {
+          DailyUsageChart(data: dailyCosts, shortDay: shortDay)
+        }
+
+        HStack(alignment: .top, spacing: 24) {
+          // Token breakdown (input vs output)
+          TokenBreakdownView(
+            inputTokens: workerInputTokens,
+            outputTokens: workerOutputTokens,
+            totalCost: workerTotalCost
+          )
+
+          // Model breakdown
+          ModelBreakdownView(models: modelBreakdown)
+        }
+        
+        // Agent and Project breakdowns
+        HStack(alignment: .top, spacing: 24) {
+          // Agent type breakdown
+          AgentBreakdownView(agents: agentBreakdown)
+          
+          // Project breakdown
+          ProjectBreakdownView(projects: projectBreakdown)
+        }
+      }
+      .padding(32)
+    }
+    .background(ATheme.boardBg)
+  }
+}
+
+// MARK: - Data Types
+
+private struct DailyUsagePoint: Identifiable {
+  let day: String
+  let workerCost: Double
+  let mainCost: Double
+  let workerTokens: Int
+  let mainTokens: Int
+
+  var totalCost: Double { workerCost + mainCost }
+  var totalTokens: Int { workerTokens + mainTokens }
+  var id: String { day }
+}
+
+// MARK: - Summary Card
+
+private struct UsageSummaryCard: View {
+  let title: String
+  let value: String
+  let icon: String
+  let color: Color
+  var tooltip: String? = nil
+
+  @State private var showingPopover = false
+
+  var body: some View {
+    VStack(spacing: 10) {
+      HStack(spacing: 6) {
+        Image(systemName: icon)
+          .font(.system(size: 12))
+          .foregroundStyle(color)
+        Text(title)
+          .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(.secondary)
+        if let tip = tooltip {
+          Button {
+            showingPopover.toggle()
+          } label: {
+            Image(systemName: "info.circle")
+              .font(.system(size: 10))
+              .foregroundStyle(.tertiary)
+              .frame(width: 14, height: 14, alignment: .center)
+          }
+          .buttonStyle(.plain)
+          .help(tip)
+          .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
+            ScrollView {
+              Text(tip)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+            }
+            .frame(maxWidth: 360, maxHeight: 260)
+          }
+        }
+      }
+      Text(value)
+        .font(.title2)
+        .fontWeight(.bold)
+        .foregroundStyle(color)
+    }
+    .frame(minWidth: 130, maxWidth: .infinity)
+    .padding(.horizontal, 18)
+    .padding(.vertical, 16)
+    .background(ATheme.cardBg)
+    .clipShape(RoundedRectangle(cornerRadius: ATheme.cardRadius))
+    .overlay(
+      RoundedRectangle(cornerRadius: ATheme.cardRadius)
+        .stroke(ATheme.border, lineWidth: 0.5)
+    )
+  }
+}
+
+// MARK: - Daily Usage Chart
+
+private struct DailyUsageChart: View {
+  let data: [DailyUsagePoint]
+  let shortDay: (String) -> String
+
+  private var maxCost: Double {
+    max(data.map(\.totalCost).max() ?? 1, 0.01)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      SectionHeaderWithInfo(
+        title: "Daily Spend",
+        tooltip: "Daily cost from worker agent sessions (code implementation, research, file operations)."
+      )
+
+      // Bar chart
+      HStack(alignment: .bottom, spacing: max(3, 10 - CGFloat(data.count) / 4)) {
+        ForEach(data) { point in
+          VStack(spacing: 5) {
+            // Cost label
+            if point.totalCost > 0 {
+              Text(String(format: "$%.2f", point.totalCost))
+                .font(.system(size: 10, weight: .medium).monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+
+            // Bar
+            RoundedRectangle(cornerRadius: 3)
+              .fill(Color.indigo.opacity(0.7))
+              .frame(height: max(3, CGFloat(point.totalCost / maxCost) * 180))
+              .frame(maxWidth: 48)
+
+            // Day label
+            Text(shortDay(point.day))
+              .font(.system(size: 10))
+              .foregroundStyle(.tertiary)
+          }
+          .frame(minWidth: 36, maxWidth: .infinity)
+        }
+      }
+      .frame(minHeight: 220)
+      .padding(.horizontal, 10)
+    }
+    .padding(20)
+    .background(ATheme.cardBg)
+    .clipShape(RoundedRectangle(cornerRadius: ATheme.cardRadius))
+    .overlay(
+      RoundedRectangle(cornerRadius: ATheme.cardRadius)
+        .stroke(ATheme.border, lineWidth: 0.5)
+    )
+  }
+}
+
+// MARK: - Token Breakdown View
+
+private struct TokenBreakdownView: View {
+  let inputTokens: Int
+  let outputTokens: Int
+  let totalCost: Double
+
+  private var totalTokens: Int { inputTokens + outputTokens }
+  private var inputPct: Double { totalTokens > 0 ? Double(inputTokens) / Double(totalTokens) : 0 }
+  private var outputPct: Double { totalTokens > 0 ? Double(outputTokens) / Double(totalTokens) : 0 }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      SectionHeaderWithInfo(
+        title: "Token Breakdown",
+        tooltip: "Input tokens: prompts, context, and instructions sent to the AI.\nOutput tokens: responses, code, and analysis generated by the AI.\n\nOutput tokens are typically 3-5x more expensive than input tokens."
+      )
+
+      if totalTokens > 0 {
+        // Proportional token bar
+        GeometryReader { geo in
+          HStack(spacing: 1) {
+            RoundedRectangle(cornerRadius: 4)
+              .fill(Color.blue.opacity(0.7))
+              .frame(width: max(4, geo.size.width * inputPct))
+            RoundedRectangle(cornerRadius: 4)
+              .fill(Color.green.opacity(0.7))
+              .frame(width: max(4, geo.size.width * outputPct))
+          }
+        }
+        .frame(height: 24)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+
+        // Two side-by-side cards for Input and Output
+        HStack(alignment: .top, spacing: 14) {
+          // Input tokens card
+          VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+              Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.blue)
+              Text("Input Tokens")
+                .font(.system(size: 13, weight: .semibold))
+            }
+            Text("Prompts, context, instructions")
+              .font(.system(size: 10))
+              .foregroundStyle(.tertiary)
+              .lineLimit(2)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 3) {
+              Text(formatTokens(inputTokens))
+                .font(.title3.monospacedDigit())
+                .fontWeight(.bold)
+                .foregroundStyle(.blue)
+              Text(String(format: "%.0f%% of total", inputPct * 100))
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+          }
+          .padding(14)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(Color.blue.opacity(0.04))
+          .clipShape(RoundedRectangle(cornerRadius: 10))
+          .overlay(
+            RoundedRectangle(cornerRadius: 10)
+              .stroke(Color.blue.opacity(0.15), lineWidth: 1)
+          )
+
+          // Output tokens card
+          VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+              Image(systemName: "arrow.up.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.green)
+              Text("Output Tokens")
+                .font(.system(size: 13, weight: .semibold))
+            }
+            Text("Responses, code, analysis")
+              .font(.system(size: 10))
+              .foregroundStyle(.tertiary)
+              .lineLimit(2)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 3) {
+              Text(formatTokens(outputTokens))
+                .font(.title3.monospacedDigit())
+                .fontWeight(.bold)
+                .foregroundStyle(.green)
+              Text(String(format: "%.0f%% of total", outputPct * 100))
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+          }
+          .padding(14)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(Color.green.opacity(0.04))
+          .clipShape(RoundedRectangle(cornerRadius: 10))
+          .overlay(
+            RoundedRectangle(cornerRadius: 10)
+              .stroke(Color.green.opacity(0.15), lineWidth: 1)
+          )
+        }
+
+        // Total cost summary
+        HStack(spacing: 6) {
+          Image(systemName: "dollarsign.circle.fill")
+            .font(.system(size: 12))
+            .foregroundStyle(.mint)
+          Text("Total Cost:")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.secondary)
+          Text(String(format: "$%.2f", totalCost))
+            .font(.system(size: 14, weight: .bold).monospacedDigit())
+            .foregroundStyle(.mint)
+        }
+        .padding(.top, 4)
+      } else {
+        Text("No usage data yet")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .padding(.vertical, 8)
+      }
+    }
+    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+    .padding(20)
+    .background(ATheme.cardBg)
+    .clipShape(RoundedRectangle(cornerRadius: ATheme.cardRadius))
+    .overlay(
+      RoundedRectangle(cornerRadius: ATheme.cardRadius)
+        .stroke(ATheme.border, lineWidth: 0.5)
+    )
+  }
+}
+
+// MARK: - Model Breakdown View
+
+private struct ModelBreakdownView: View {
+  let models: [(String, Int, Double)]
+
+  private var maxCost: Double {
+    max(models.map(\.2).max() ?? 1, 0.01)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      SectionHeaderWithInfo(
+        title: "By Model",
+        tooltip: "Token usage and estimated cost broken down by AI model.\nOpus: $15/$75 per 1M input/output tokens\nSonnet: $3/$15 per 1M input/output tokens"
+      )
+
+      if models.isEmpty {
+        Text("No model data yet")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      } else {
+        ForEach(models, id: \.0) { model, tokens, cost in
+          VStack(alignment: .leading, spacing: 4) {
+            HStack {
+              Text(model)
+                .font(.footnote)
+                .fontWeight(.medium)
+                .lineLimit(1)
+              Spacer()
+              Text(String(format: "$%.2f", cost))
+                .font(.footnote.monospacedDigit())
+                .fontWeight(.medium)
+            }
+            HStack(spacing: 8) {
+              GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 3)
+                  .fill(modelColor(model).opacity(0.5))
+                  .frame(width: max(4, geo.size.width * CGFloat(cost / maxCost)))
+              }
+              .frame(height: 8)
+
+              Text(formatTokens(tokens))
+                .font(.system(size: 10).monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(width: 50, alignment: .trailing)
+            }
+          }
+          if model != models.last?.0 {
+            Divider()
+          }
+        }
+      }
+    }
+    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+    .padding(20)
+    .background(ATheme.cardBg)
+    .clipShape(RoundedRectangle(cornerRadius: ATheme.cardRadius))
+    .overlay(
+      RoundedRectangle(cornerRadius: ATheme.cardRadius)
+        .stroke(ATheme.border, lineWidth: 0.5)
+    )
+  }
+
+  private func modelColor(_ model: String) -> Color {
+    if model.contains("opus") { return .purple }
+    if model.contains("sonnet") { return .blue }
+    if model.contains("haiku") { return .green }
+    if model.contains("gpt") { return .orange }
+    return .gray
+  }
+}
+
+// MARK: - Agent Breakdown View
+
+private struct AgentBreakdownView: View {
+  let agents: [(String, Int, Int, Double)]  // (agent, runs, tokens, cost)
+
+  private var maxCost: Double {
+    max(agents.map(\.3).max() ?? 1, 0.01)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      SectionHeaderWithInfo(
+        title: "By Agent",
+        tooltip: "Token usage and cost broken down by agent type.\nShows which AI assistants (programmer, researcher, writer, etc.) are consuming the most resources."
+      )
+
+      if agents.isEmpty {
+        Text("No agent data yet")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      } else {
+        ForEach(agents, id: \.0) { agent, runs, tokens, cost in
+          VStack(alignment: .leading, spacing: 4) {
+            HStack {
+              HStack(spacing: 6) {
+                Text(agentEmoji(agent))
+                  .font(.system(size: 14))
+                Text(agent.capitalized)
+                  .font(.footnote)
+                  .fontWeight(.medium)
+              }
+              Spacer()
+              Text(String(format: "$%.2f", cost))
+                .font(.footnote.monospacedDigit())
+                .fontWeight(.medium)
+            }
+            HStack(spacing: 8) {
+              GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 3)
+                  .fill(agentColor(agent).opacity(0.5))
+                  .frame(width: max(4, geo.size.width * CGFloat(cost / maxCost)))
+              }
+              .frame(height: 8)
+
+              VStack(alignment: .trailing, spacing: 1) {
+                Text(formatTokens(tokens))
+                  .font(.system(size: 10).monospacedDigit())
+                  .foregroundStyle(.tertiary)
+                Text("\(runs) runs")
+                  .font(.system(size: 9).monospacedDigit())
+                  .foregroundStyle(.quaternary)
+              }
+              .frame(width: 60, alignment: .trailing)
+            }
+          }
+          if agent != agents.last?.0 {
+            Divider()
+          }
+        }
+      }
+    }
+    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+    .padding(20)
+    .background(ATheme.cardBg)
+    .clipShape(RoundedRectangle(cornerRadius: ATheme.cardRadius))
+    .overlay(
+      RoundedRectangle(cornerRadius: ATheme.cardRadius)
+        .stroke(ATheme.border, lineWidth: 0.5)
+    )
+  }
+
+  private func agentColor(_ agent: String) -> Color {
+    switch agent.lowercased() {
+    case "programmer": return .blue
+    case "architect": return .purple
+    case "researcher": return .green
+    case "reviewer": return .orange
+    case "writer": return .pink
+    default: return .gray
+    }
+  }
+  
+  private func agentEmoji(_ agent: String) -> String {
+    switch agent.lowercased() {
+    case "programmer": return "🔧"
+    case "architect": return "🏗️"
+    case "researcher": return "🔬"
+    case "reviewer": return "🔍"
+    case "writer": return "✍️"
+    default: return "🤖"
+    }
+  }
+}
+
+// MARK: - Project Breakdown View
+
+private struct ProjectBreakdownView: View {
+  let projects: [(String, Int, Int, Double)]  // (project, runs, tokens, cost)
+
+  private var maxCost: Double {
+    max(projects.map(\.3).max() ?? 1, 0.01)
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      SectionHeaderWithInfo(
+        title: "By Project",
+        tooltip: "Token usage and cost broken down by project.\nShows which projects are consuming the most AI resources."
+      )
+
+      if projects.isEmpty {
+        Text("No project data yet")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      } else {
+        ForEach(projects, id: \.0) { project, runs, tokens, cost in
+          VStack(alignment: .leading, spacing: 4) {
+            HStack {
+              Text(project)
+                .font(.footnote)
+                .fontWeight(.medium)
+                .lineLimit(1)
+              Spacer()
+              Text(String(format: "$%.2f", cost))
+                .font(.footnote.monospacedDigit())
+                .fontWeight(.medium)
+            }
+            HStack(spacing: 8) {
+              GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 3)
+                  .fill(Color.indigo.opacity(0.5))
+                  .frame(width: max(4, geo.size.width * CGFloat(cost / maxCost)))
+              }
+              .frame(height: 8)
+
+              VStack(alignment: .trailing, spacing: 1) {
+                Text(formatTokens(tokens))
+                  .font(.system(size: 10).monospacedDigit())
+                  .foregroundStyle(.tertiary)
+                Text("\(runs) runs")
+                  .font(.system(size: 9).monospacedDigit())
+                  .foregroundStyle(.quaternary)
+              }
+              .frame(width: 60, alignment: .trailing)
+            }
+          }
+          if project != projects.last?.0 {
+            Divider()
+          }
+        }
+      }
+    }
+    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+    .padding(20)
+    .background(ATheme.cardBg)
+    .clipShape(RoundedRectangle(cornerRadius: ATheme.cardRadius))
+    .overlay(
+      RoundedRectangle(cornerRadius: ATheme.cardRadius)
+        .stroke(ATheme.border, lineWidth: 0.5)
+    )
+  }
+}
+
+// MARK: - Section Header With Info Tooltip
+
+private struct SectionHeaderWithInfo: View {
+  let title: String
+  let tooltip: String
+
+  @State private var showingPopover = false
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Text(title)
+        .font(.headline)
+        .fontWeight(.bold)
+
+      Button {
+        showingPopover.toggle()
+      } label: {
+        Image(systemName: "info.circle")
+          .font(.system(size: 12))
+          .foregroundStyle(.tertiary)
+          .frame(width: 18, height: 18, alignment: .center)
+      }
+      .buttonStyle(.plain)
+      .help(tooltip)
+      .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
+        ScrollView {
+          Text(tooltip)
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(12)
+        }
+        .frame(maxWidth: 360, maxHeight: 260)
+      }
+    }
+  }
+}
+
+// MARK: - Token Formatter
+
+private func formatTokens(_ count: Int) -> String {
+  if count >= 1_000_000 {
+    return String(format: "%.1fM", Double(count) / 1_000_000)
+  } else if count >= 1_000 {
+    return String(format: "%.0fK", Double(count) / 1_000)
+  }
+  return "\(count)"
+}
