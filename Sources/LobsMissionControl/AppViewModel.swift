@@ -526,7 +526,8 @@ final class AppViewModel: ObservableObject {
 
     // Initialize API service
     let baseURL = loadedConfig?.serverURL ?? "http://localhost:8000"
-    api = (try? APIService(baseURLString: baseURL)) ?? APIService(baseURL: URL(string: "http://localhost:8000")!)
+    let apiToken = loadedConfig?.apiToken
+    api = (try? APIService(baseURLString: baseURL, apiToken: apiToken)) ?? APIService(baseURL: URL(string: "http://localhost:8000")!, apiToken: apiToken)
     config = loadedConfig
     
     // Load settings from config

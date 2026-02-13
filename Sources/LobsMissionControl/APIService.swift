@@ -101,16 +101,18 @@ enum APIError: Error, LocalizedError {
 /// Provides the same interface as LobsControlStore but uses HTTP instead of file I/O.
 final class APIService {
   let baseURL: URL
+  var apiToken: String?
   
-  init(baseURL: URL) {
+  init(baseURL: URL, apiToken: String? = nil) {
     self.baseURL = baseURL
+    self.apiToken = apiToken
   }
   
-  convenience init(baseURLString: String = "http://localhost:8000") throws {
+  convenience init(baseURLString: String = "http://localhost:8000", apiToken: String? = nil) throws {
     guard let url = URL(string: baseURLString) else {
       throw APIError.invalidURL
     }
-    self.init(baseURL: url)
+    self.init(baseURL: url, apiToken: apiToken)
   }
   
   // MARK: - HTTP Helpers
@@ -166,6 +168,11 @@ final class APIService {
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     req.setValue("application/json", forHTTPHeaderField: "Accept")
     
+    // Add authorization header if token is present
+    if let token = apiToken {
+      req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+    
     if let body = body {
       do {
         req.httpBody = try encoder().encode(body)
@@ -219,6 +226,11 @@ final class APIService {
     var req = URLRequest(url: url)
     req.httpMethod = method
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    // Add authorization header if token is present
+    if let token = apiToken {
+      req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
     
     if let body = body {
       do {
@@ -1503,6 +1515,54 @@ final class APIService {
       method: "GET",
       path: "/api/memories/search",
       queryItems: [URLQueryItem(name: "q", value: query)]
+    )
+  }
+  
+  // MARK: - Status
+  
+  func fetchSystemOverview() async throws -> SystemOverview {
+    return try await request(
+      method: "GET",
+      path: "/api/status/overview"
+    )
+  }
+  
+  func fetchActivity(limit: Int?, since: Date?) async throws -> [ActivityEvent] {
+    var queryItems: [URLQueryItem] = []
+    
+    if let limit = limit {
+      queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+    }
+    if let since = since {
+      let formatter = ISO8601DateFormatter()
+      queryItems.append(URLQueryItem(name: "since", value: formatter.string(from: since)))
+    }
+    
+    return try await request(
+      method: "GET",
+      path: "/api/status/activity",
+      queryItems: queryItems.isEmpty ? nil : queryItems
+    )
+  }
+  
+  func fetchCosts() async throws -> CostSummary {
+    return try await request(
+      method: "GET",
+      path: "/api/status/costs"
+    )
+  }
+  
+  func pauseOrchestrator() async throws {
+    try await requestVoid(
+      method: "POST",
+      path: "/api/orchestrator/pause"
+    )
+  }
+  
+  func resumeOrchestrator() async throws {
+    try await requestVoid(
+      method: "POST",
+      path: "/api/orchestrator/resume"
     )
   }
 }

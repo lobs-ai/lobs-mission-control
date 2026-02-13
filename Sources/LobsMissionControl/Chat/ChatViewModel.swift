@@ -32,7 +32,7 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Public API
     
     func connect(serverURL: String) {
-        chatService.connect(serverURL: serverURL, sessionKey: currentSessionKey)
+        chatService.connect(serverURL: serverURL, sessionKey: currentSessionKey, apiToken: apiService.apiToken)
         loadSessions()
     }
     

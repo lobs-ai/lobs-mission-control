@@ -12,6 +12,7 @@ struct SettingsView: View {
   @State private var showingRerunOnboardingConfirm = false
 
   @State private var serverURL: String = ""
+  @State private var apiToken: String = ""
   @State private var connectionTestStatus: ConnectionTestStatus = .idle
   
   enum ConnectionTestStatus {
@@ -101,6 +102,40 @@ struct SettingsView: View {
                   .foregroundColor(.red)
               }
             }
+          }
+          
+          // API Token
+          VStack(alignment: .leading, spacing: 8) {
+            HStack {
+              Text("API Token:")
+                .foregroundColor(.secondary)
+              Spacer()
+            }
+            
+            HStack(spacing: 8) {
+              SecureField("Enter bearer token", text: $apiToken)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, design: .monospaced))
+                .padding(8)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+                .overlay(
+                  RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                )
+                .onSubmit {
+                  saveAPIToken()
+                }
+              
+              Button("Save") {
+                saveAPIToken()
+              }
+              .buttonStyle(.bordered)
+            }
+            
+            Text("Generate tokens on the server: python3 scripts/generate_token.py <name>")
+              .font(.caption)
+              .foregroundColor(.secondary)
           }
           
           Divider()
@@ -211,6 +246,7 @@ struct SettingsView: View {
     .onAppear {
       if let config = vm.config {
         serverURL = config.serverURL
+        apiToken = config.apiToken ?? ""
       }
     }
     .sheet(isPresented: $showingPersonalityEditor) {
@@ -317,6 +353,22 @@ struct SettingsView: View {
       try ConfigManager.save(config)
     } catch {
       print("⚠️ Failed to save server URL: \(error)")
+    }
+  }
+  
+  private func saveAPIToken() {
+    guard var config = vm.config else { return }
+    let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    config.apiToken = trimmedToken.isEmpty ? nil : trimmedToken
+    vm.config = config
+    
+    // Update the API service token
+    vm.api.apiToken = config.apiToken
+    
+    do {
+      try ConfigManager.save(config)
+    } catch {
+      print("⚠️ Failed to save API token: \(error)")
     }
   }
   

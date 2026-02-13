@@ -17,6 +17,7 @@ final class ChatService: NSObject {
     
     private var webSocketTask: URLSessionWebSocketTask?
     private var serverURL: String = ""
+    private var apiToken: String?
     private var currentSessionKey: String = "main"
     private var reconnectAttempts = 0
     private var maxReconnectDelay: TimeInterval = 30
@@ -33,10 +34,11 @@ final class ChatService: NSObject {
     
     // MARK: - Public API
     
-    func connect(serverURL: String, sessionKey: String) {
+    func connect(serverURL: String, sessionKey: String, apiToken: String? = nil) {
         guard connectionState != .connected(sessionKey: sessionKey) else { return }
         
         self.serverURL = serverURL
+        self.apiToken = apiToken
         self.currentSessionKey = sessionKey
         self.isIntentionalDisconnect = false
         
@@ -87,6 +89,11 @@ final class ChatService: NSObject {
             .replacingOccurrences(of: "https://", with: "wss://")
         
         wsURLString += "/api/chat/ws?session_key=\(currentSessionKey)"
+        
+        // Add token if present
+        if let token = apiToken {
+            wsURLString += "&token=\(token)"
+        }
         
         guard let url = URL(string: wsURLString) else {
             connectionState = .error("Invalid WebSocket URL")
