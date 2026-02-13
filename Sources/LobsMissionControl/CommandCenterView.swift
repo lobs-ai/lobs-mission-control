@@ -13,10 +13,13 @@ struct CommandCenterView: View {
   var onOpenTeam: (() -> Void)? = nil
   var onStartResearch: (() -> Void)? = nil
   var onOpenChat: (() -> Void)? = nil
+  var memoryViewModel: MemoryViewModel?
   
   @AppStorage("lastCommandCenterVisit") private var lastVisitTimestamp: Double = Date().timeIntervalSince1970
   @State private var showWhileYouWereAway = false
   @State private var whileYouWereAwayExpanded = false
+  @State private var upcomingEvents: [ScheduledEvent] = []
+  @State private var recentMemories: [MemoryItem] = []
   
   private var lastVisit: Date {
     Date(timeIntervalSince1970: lastVisitTimestamp)
@@ -195,8 +198,14 @@ struct CommandCenterView: View {
             onViewDetails: { onOpenTeam?() }
           )
           
+          // Upcoming Events
+          UpcomingEventsCard(
+            events: upcomingEvents
+          )
+          
           // Recent Memories
           RecentMemoriesCard(
+            memories: recentMemories,
             onViewAll: { onOpenMemory?() }
           )
           }
@@ -211,7 +220,22 @@ struct CommandCenterView: View {
       let activity = activitySinceLastVisit
       showWhileYouWereAway = (activity.tasks + activity.inbox + activity.errors) > 0
       
-      // Update last visit timestamp on disappear
+      // Load calendar events
+      Task {
+        do {
+          upcomingEvents = try await vm.api.fetchUpcomingEvents(limit: 5)
+        } catch {
+          print("Failed to load upcoming events: \(error)")
+        }
+      }
+      
+      // Load recent memories
+      Task {
+        if let memVM = memoryViewModel {
+          await memVM.loadMemories()
+          recentMemories = Array(memVM.memories.prefix(3))
+        }
+      }
     }
     .onDisappear {
       lastVisitTimestamp = Date().timeIntervalSince1970
@@ -781,9 +805,121 @@ private struct TeamCard: View {
   }
 }
 
+// MARK: - Upcoming Events Card
+
+private struct UpcomingEventsCard: View {
+  let events: [ScheduledEvent]
+  
+  var body: some View {
+    HomeCardContainer {
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Image(systemName: "calendar.circle.fill")
+            .font(.title3)
+            .foregroundStyle(.orange)
+          Text("Upcoming Events")
+            .font(.headline)
+          
+          Spacer()
+        }
+        
+        if events.isEmpty {
+          VStack(spacing: 8) {
+            Image(systemName: "calendar")
+              .font(.largeTitle)
+              .foregroundStyle(.secondary)
+            Text("No upcoming events")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 20)
+        } else {
+          VStack(spacing: 10) {
+            ForEach(events) { event in
+              HStack(spacing: 10) {
+                VStack(alignment: .center, spacing: 2) {
+                  Text(dayText(event.scheduledAt))
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                  Text(dateText(event.scheduledAt))
+                    .font(.title3.bold())
+                    .foregroundStyle(.orange)
+                }
+                .frame(width: 40)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(event.title)
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                  
+                  HStack(spacing: 4) {
+                    if let type = event.eventType {
+                      Text(typeIcon(type))
+                        .font(.caption2)
+                      Text(type.capitalized)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                    
+                    if !isAllDay(event) {
+                      Text("•")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                      Text(timeText(event.scheduledAt))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                  }
+                }
+                
+                Spacer()
+              }
+              .padding(.vertical, 4)
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  private func dayText(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "EEE"
+    return formatter.string(from: date)
+  }
+  
+  private func dateText(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "d"
+    return formatter.string(from: date)
+  }
+  
+  private func timeText(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
+  }
+  
+  private func isAllDay(_ event: ScheduledEvent) -> Bool {
+    event.allDay ?? false
+  }
+  
+  private func typeIcon(_ type: String) -> String {
+    switch type.lowercased() {
+    case "reminder": return "⏰"
+    case "task": return "✅"
+    case "meeting": return "👥"
+    default: return "📅"
+    }
+  }
+}
+
 // MARK: - Recent Memories Card
 
 private struct RecentMemoriesCard: View {
+  let memories: [MemoryItem]
   let onViewAll: () -> Void
   
   var body: some View {
@@ -799,17 +935,52 @@ private struct RecentMemoriesCard: View {
           Spacer()
         }
         
-        // Placeholder - would need to fetch from API
-        VStack(spacing: 8) {
-          Image(systemName: "brain")
-            .font(.largeTitle)
-            .foregroundStyle(.secondary)
-          Text("Memory integration coming soon")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        if memories.isEmpty {
+          VStack(spacing: 8) {
+            Image(systemName: "brain")
+              .font(.largeTitle)
+              .foregroundStyle(.secondary)
+            Text("No recent memories")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 20)
+        } else {
+          VStack(spacing: 8) {
+            ForEach(memories) { memory in
+              HStack(spacing: 10) {
+                Image(systemName: memory.typeBadgeIcon)
+                  .font(.caption)
+                  .foregroundStyle(.purple)
+                  .frame(width: 20)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(memory.displayTitle)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                  
+                  HStack(spacing: 4) {
+                    Text(agentEmoji(memory.agent))
+                      .font(.caption2)
+                    Text(memory.agent.capitalized)
+                      .font(.caption2)
+                      .foregroundStyle(.secondary)
+                    Text("•")
+                      .font(.caption2)
+                      .foregroundStyle(.secondary)
+                    Text(formatDate(memory.updatedAt))
+                      .font(.caption2)
+                      .foregroundStyle(.secondary)
+                  }
+                }
+                
+                Spacer()
+              }
+              .padding(.vertical, 4)
+            }
+          }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
         
         Divider()
         Button {
@@ -827,6 +998,24 @@ private struct RecentMemoriesCard: View {
         .buttonStyle(.plain)
       }
     }
+  }
+  
+  private func agentEmoji(_ agent: String) -> String {
+    switch agent {
+    case "main": return "👤"
+    case "programmer": return "💻"
+    case "writer": return "✍️"
+    case "researcher": return "🔍"
+    case "reviewer": return "👀"
+    case "architect": return "🏗️"
+    default: return "🤖"
+    }
+  }
+  
+  private func formatDate(_ date: Date) -> String {
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .abbreviated
+    return formatter.localizedString(for: date, relativeTo: Date())
   }
 }
 

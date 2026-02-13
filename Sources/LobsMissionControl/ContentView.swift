@@ -333,7 +333,8 @@ struct ContentView: View {
               },
               onOpenChat: {
                 withAnimation(.easeInOut(duration: 0.25)) { showChat = true }
-              }
+              },
+              memoryViewModel: memoryViewModel
             )
           } else if vm.isResearchProject {
             ResearchDocView(vm: vm)
