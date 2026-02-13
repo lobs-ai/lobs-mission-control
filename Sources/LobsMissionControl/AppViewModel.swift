@@ -279,6 +279,9 @@ final class AppViewModel: ObservableObject {
       settings = s
     }
   }
+  
+  // Topics (Knowledge Organization)
+  @Published var topics: [Topic] = []
 
   // Inbox read-state persistence (repo-backed)
   private var isApplyingInboxReadState: Bool = false
@@ -575,6 +578,7 @@ final class AppViewModel: ObservableObject {
     // Load documents immediately on launch (don't wait for first refresh)
     if let repoURL {
       loadAgentDocuments()
+      loadTopics()
     }
 
     // Check for dashboard source updates on launch
@@ -1467,6 +1471,23 @@ final class AppViewModel: ObservableObject {
     readDocumentIds.remove(doc.id)
     if let idx = agentDocuments.firstIndex(where: { $0.id == doc.id }) {
       agentDocuments[idx].isRead = false
+    }
+  }
+  
+  // MARK: - Topics
+  
+  func loadTopics() {
+    Task {
+      do {
+        let topics = try await api.loadTopics()
+        await MainActor.run {
+          self.topics = topics
+        }
+      } catch {
+        await MainActor.run {
+          self.flashError("Failed to load topics: \(error.localizedDescription)")
+        }
+      }
     }
   }
 

@@ -372,6 +372,7 @@ struct RequestEditVersion: Codable, Identifiable, Hashable {
 struct ResearchRequest: Codable, Identifiable, Hashable {
   var id: String
   var projectId: String
+  var topicId: String?      // Topic FK
   var tileId: String?       // If attached to a specific tile
   var prompt: String
   var status: ResearchRequestStatus
@@ -407,9 +408,10 @@ struct ResearchRequest: Codable, Identifiable, Hashable {
 
   // No custom CodingKeys needed - let .convertFromSnakeCase handle snake_case conversion
 
-  init(id: String, projectId: String, tileId: String? = nil, prompt: String, status: ResearchRequestStatus, response: String? = nil, author: String? = nil, priority: ResearchPriority? = nil, deliverables: [RequestDeliverable]? = nil, editHistory: [RequestEditVersion]? = nil, parentRequestId: String? = nil, assignedWorker: String? = nil, createdAt: Date, updatedAt: Date) {
+  init(id: String, projectId: String, topicId: String? = nil, tileId: String? = nil, prompt: String, status: ResearchRequestStatus, response: String? = nil, author: String? = nil, priority: ResearchPriority? = nil, deliverables: [RequestDeliverable]? = nil, editHistory: [RequestEditVersion]? = nil, parentRequestId: String? = nil, assignedWorker: String? = nil, createdAt: Date, updatedAt: Date) {
     self.id = id
     self.projectId = projectId
+    self.topicId = topicId
     self.tileId = tileId
     self.prompt = prompt
     self.status = status
@@ -568,6 +570,30 @@ enum DocumentStatus: String, Codable, Hashable {
   case archived
 }
 
+// MARK: - Topic
+
+struct Topic: Identifiable, Hashable, Codable {
+  var id: String
+  var title: String
+  var description: String?
+  var icon: String?
+  var linkedProjectId: String?
+  var autoCreated: Bool
+  var createdAt: Date
+  var updatedAt: Date
+  
+  init(id: String, title: String, description: String? = nil, icon: String? = nil, linkedProjectId: String? = nil, autoCreated: Bool = false, createdAt: Date, updatedAt: Date) {
+    self.id = id
+    self.title = title
+    self.description = description
+    self.icon = icon
+    self.linkedProjectId = linkedProjectId
+    self.autoCreated = autoCreated
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+  }
+}
+
 struct AgentDocument: Identifiable, Hashable, Codable {
   var id: String          // Full path: "reports/pending/foo.md" or "research/topic/bar.md"
   var title: String       // Extracted from filename or first heading
@@ -577,14 +603,15 @@ struct AgentDocument: Identifiable, Hashable, Codable {
   var contentIsTruncated: Bool
   var source: DocumentSource  // writer or researcher
   var status: DocumentStatus? // For reports only (pending/approved/rejected)
-  var topic: String?      // For research: the subdirectory name
+  var topic: String?      // For research: the subdirectory name (legacy)
+  var topicId: String?    // Topic FK (new)
   var projectId: String?  // For reports: associated project
   var taskId: String?     // Task that generated this document
   var date: Date          // File modification date or extracted date
   var isRead: Bool        // Tracked locally
   var summary: String?    // High-level summary extracted from first paragraph
   
-  init(id: String, title: String, filename: String, relativePath: String, content: String, contentIsTruncated: Bool, source: DocumentSource, status: DocumentStatus?, topic: String?, projectId: String?, taskId: String?, date: Date, isRead: Bool, summary: String? = nil) {
+  init(id: String, title: String, filename: String, relativePath: String, content: String, contentIsTruncated: Bool, source: DocumentSource, status: DocumentStatus?, topic: String?, topicId: String? = nil, projectId: String?, taskId: String?, date: Date, isRead: Bool, summary: String? = nil) {
     self.id = id
     self.title = title
     self.filename = filename
@@ -594,6 +621,7 @@ struct AgentDocument: Identifiable, Hashable, Codable {
     self.source = source
     self.status = status
     self.topic = topic
+    self.topicId = topicId
     self.projectId = projectId
     self.taskId = taskId
     self.date = date

@@ -739,6 +739,63 @@ final class APIService {
     )
   }
   
+  // MARK: - Topics
+  
+  func loadTopics() async throws -> [Topic] {
+    return try await request(
+      method: "GET",
+      path: "/api/topics",
+      queryItems: [URLQueryItem(name: "limit", value: "1000")]
+    )
+  }
+  
+  func createTopic(title: String, description: String?, icon: String?) async throws -> Topic {
+    struct CreateTopicRequest: Codable {
+      let id: String
+      let title: String
+      let description: String?
+      let icon: String?
+      let autoCreated: Bool
+    }
+    
+    let id = "topic-\(UUID().uuidString.lowercased())"
+    let body = CreateTopicRequest(
+      id: id,
+      title: title,
+      description: description,
+      icon: icon,
+      autoCreated: false
+    )
+    
+    return try await request(
+      method: "POST",
+      path: "/api/topics",
+      body: body
+    )
+  }
+  
+  func createResearchRequestForTopic(topicId: String, prompt: String) async throws -> ResearchRequest {
+    struct CreateRequestBody: Codable {
+      let id: String
+      let prompt: String
+      let status: String
+      let author: String
+    }
+    
+    let body = CreateRequestBody(
+      id: UUID().uuidString,
+      prompt: prompt,
+      status: "open",
+      author: "rafe"
+    )
+    
+    return try await request(
+      method: "POST",
+      path: "/api/topics/\(topicId)/requests",
+      body: body
+    )
+  }
+  
   // MARK: - Worker Status
   
   func loadWorkerStatus() async throws -> WorkerStatus? {

@@ -173,7 +173,7 @@ struct MainView: View {
                 .navigationTitle("Memory")
             
         case .knowledge:
-            DocumentsView(vm: vm, isPresented: $documentsPresented)
+            TopicBrowserView(vm: vm, isPresented: $documentsPresented)
                 .navigationTitle("Knowledge")
             
         case .calendar:
