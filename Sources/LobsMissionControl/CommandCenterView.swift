@@ -216,6 +216,14 @@ struct CommandCenterView: View {
               }
               
               Spacer()
+              
+              // Software Update Badge (top right)
+              if vm.dashboardUpdateAvailable {
+                SoftwareUpdateBadge(
+                  onTap: { onOpenStatus?() }
+                )
+                .transition(.scale.combined(with: .opacity))
+              }
             }
             .padding(.horizontal, 24)
             .padding(.top, 28)
@@ -1873,6 +1881,61 @@ private struct NewTaskSheet: View {
           isCreating = false
         }
       }
+    }
+  }
+}
+
+// MARK: - Software Update Badge
+
+private struct SoftwareUpdateBadge: View {
+  let onTap: () -> Void
+  
+  @State private var isHovering = false
+  @State private var isPulsing = true
+  
+  var body: some View {
+    Button(action: onTap) {
+      HStack(spacing: 8) {
+        Image(systemName: "arrow.down.circle.fill")
+          .font(.title3)
+          .foregroundStyle(.white)
+          .scaleEffect(isPulsing ? 1.1 : 1.0)
+          .animation(
+            .easeInOut(duration: 1.5)
+              .repeatForever(autoreverses: true),
+            value: isPulsing
+          )
+        
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Update Available")
+            .font(.caption.bold())
+            .foregroundStyle(.white)
+          
+          Text("Tap to view")
+            .font(.system(size: 10))
+            .foregroundStyle(.white.opacity(0.85))
+        }
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 10)
+      .background(
+        RoundedRectangle(cornerRadius: 10)
+          .fill(
+            LinearGradient(
+              colors: [Color.blue, Color.blue.opacity(0.8)],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
+          )
+          .shadow(color: Color.blue.opacity(isHovering ? 0.5 : 0.3), radius: isHovering ? 12 : 8, x: 0, y: 4)
+      )
+      .scaleEffect(isHovering ? 1.03 : 1.0)
+      .animation(.easeOut(duration: 0.2), value: isHovering)
+    }
+    .buttonStyle(.plain)
+    .onHover { h in isHovering = h }
+    .onAppear {
+      isPulsing = true
     }
   }
 }
