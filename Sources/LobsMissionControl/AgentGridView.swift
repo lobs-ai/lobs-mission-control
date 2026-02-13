@@ -62,11 +62,18 @@ private struct AgentCard: View {
   private var displayName: String { status?.displayName ?? agentType.capitalized }
   private var emoji: String { status?.emoji ?? "\u{1F916}" }
 
+  private var isRecentlyActive: Bool {
+    guard let lastCompleted = status?.lastCompletedAt else { return false }
+    let secondsSince = Date().timeIntervalSince(lastCompleted)
+    return secondsSince < 300  // 5 minutes
+  }
+
   private var statusColor: Color {
     switch status?.status ?? "idle" {
     case "working": return .green
     case "thinking": return .yellow
     case "finalizing": return .blue
+    case "idle" where isRecentlyActive: return .green
     default: return .gray
     }
   }
@@ -76,6 +83,7 @@ private struct AgentCard: View {
     case "working": return "Working"
     case "thinking": return "Thinking"
     case "finalizing": return "Finalizing"
+    case "idle" where isRecentlyActive: return "Recently Active"
     default: return "Idle"
     }
   }
@@ -87,6 +95,20 @@ private struct AgentCard: View {
     if interval < 3600 { return "\(Int(interval / 60))m ago" }
     if interval < 86400 { return "\(Int(interval / 3600))h ago" }
     return "\(Int(interval / 86400))d ago"
+  }
+
+  private var borderColor: Color {
+    if isActive {
+      return statusColor.opacity(0.4)
+    } else if isRecentlyActive {
+      return .green.opacity(0.3)
+    } else {
+      return OTheme.border
+    }
+  }
+
+  private var borderWidth: CGFloat {
+    (isActive || isRecentlyActive) ? 1.5 : 1
   }
 
   var body: some View {
@@ -157,7 +179,7 @@ private struct AgentCard: View {
     )
     .overlay(
       RoundedRectangle(cornerRadius: OTheme.cardRadius)
-        .stroke(isActive ? statusColor.opacity(0.4) : OTheme.border, lineWidth: isActive ? 1.5 : 1)
+        .stroke(borderColor, lineWidth: borderWidth)
     )
     .contentShape(Rectangle())
   }
