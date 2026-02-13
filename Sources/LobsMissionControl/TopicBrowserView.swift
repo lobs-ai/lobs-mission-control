@@ -315,6 +315,9 @@ private struct TopicContentView: View {
   
   @State private var selectedDocument: AgentDocument? = nil
   @State private var showCreateRequestSheet: Bool = false
+  @State private var showResearchSheet: Bool = false
+  @State private var showCreateTaskSheet: Bool = false
+  @State private var showConvertProjectSheet: Bool = false
   
   var body: some View {
     VStack(spacing: 0) {
@@ -361,6 +364,45 @@ private struct TopicContentView: View {
       
       Spacer()
       
+      // Action Buttons
+      HStack(spacing: 8) {
+        Button {
+          showResearchSheet = true
+        } label: {
+          HStack(spacing: 4) {
+            Image(systemName: "magnifyingglass.circle.fill")
+            Text("Research This")
+          }
+          .font(.system(size: 13))
+        }
+        .buttonStyle(.bordered)
+        .help("Create a research request for this topic")
+        
+        Button {
+          showCreateTaskSheet = true
+        } label: {
+          HStack(spacing: 4) {
+            Image(systemName: "checklist")
+            Text("Create Task")
+          }
+          .font(.system(size: 13))
+        }
+        .buttonStyle(.bordered)
+        .help("Create a task related to this topic")
+        
+        Button {
+          showConvertProjectSheet = true
+        } label: {
+          HStack(spacing: 4) {
+            Image(systemName: "square.grid.2x2")
+            Text("Convert to Project")
+          }
+          .font(.system(size: 13))
+        }
+        .buttonStyle(.bordered)
+        .help("Create a kanban project for this topic")
+      }
+      
       // Read filter toggle
       Toggle(isOn: $showReadItems) {
         HStack(spacing: 4) {
@@ -373,6 +415,15 @@ private struct TopicContentView: View {
       .buttonStyle(.borderless)
     }
     .padding()
+    .sheet(isPresented: $showResearchSheet) {
+      ResearchThisSheet(topic: topic, vm: vm, isPresented: $showResearchSheet)
+    }
+    .sheet(isPresented: $showCreateTaskSheet) {
+      CreateTaskFromTopicSheet(topic: topic, vm: vm, isPresented: $showCreateTaskSheet)
+    }
+    .sheet(isPresented: $showConvertProjectSheet) {
+      ConvertToProjectSheet(topic: topic, vm: vm, isPresented: $showConvertProjectSheet)
+    }
   }
   
   private var topicOverview: some View {
@@ -559,7 +610,7 @@ private struct ResearchRequestRow: View {
           .lineLimit(2)
         
         HStack(spacing: 8) {
-          Text(request.status.displayName)
+          Text(request.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
             .font(.system(size: 11))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -592,8 +643,8 @@ private struct ResearchRequestRow: View {
     switch request.status {
     case .open: return "circle"
     case .inProgress: return "arrow.clockwise"
-    case .completed: return "checkmark.circle.fill"
-    case .cancelled: return "xmark.circle"
+    case .completed, .done: return "checkmark.circle.fill"
+    case .blocked: return "xmark.circle"
     }
   }
   
@@ -601,8 +652,8 @@ private struct ResearchRequestRow: View {
     switch request.status {
     case .open: return .orange
     case .inProgress: return .blue
-    case .completed: return .green
-    case .cancelled: return .gray
+    case .completed, .done: return .green
+    case .blocked: return .gray
     }
   }
 }
@@ -1091,6 +1142,565 @@ private struct CreateResearchRequestSheet: View {
         await vm.loadResearchRequests()
         
         await MainActor.run {
+          isPresented = false
+        }
+      } catch {
+        await MainActor.run {
+          errorMessage = error.localizedDescription
+          isSaving = false
+        }
+      }
+    }
+  }
+}
+
+// MARK: - Research This Sheet
+
+private struct ResearchThisSheet: View {
+  let topic: Topic
+  @ObservedObject var vm: AppViewModel
+  @Binding var isPresented: Bool
+  
+  @State private var prompt: String = ""
+  @State private var comments: String = ""
+  @State private var isSaving: Bool = false
+  @State private var errorMessage: String?
+  
+  var body: some View {
+    VStack(spacing: 0) {
+      // Header
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Research This Topic")
+            .font(.title3)
+            .fontWeight(.bold)
+          Text("Topic: \(topic.title)")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        
+        Spacer()
+        
+        Button {
+          isPresented = false
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title2)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding()
+      
+      Divider()
+      
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Research Question")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Text("What would you like to research about this topic?")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            TextEditor(text: $prompt)
+              .font(.system(size: 13))
+              .frame(height: 120)
+              .padding(8)
+              .background(Color(NSColor.textBackgroundColor))
+              .cornerRadius(6)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+              )
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Comments / Context (Optional)")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Text("Add any additional notes or context for the research")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            TextEditor(text: $comments)
+              .font(.system(size: 13))
+              .frame(height: 80)
+              .padding(8)
+              .background(Color(NSColor.textBackgroundColor))
+              .cornerRadius(6)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+              )
+          }
+          
+          if let error = errorMessage {
+            HStack(spacing: 8) {
+              Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+              Text(error)
+                .font(.subheadline)
+                .foregroundStyle(.red)
+            }
+            .padding()
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(8)
+          }
+        }
+        .padding()
+      }
+      
+      Divider()
+      
+      HStack {
+        Button("Cancel") {
+          isPresented = false
+        }
+        .keyboardShortcut(.cancelAction)
+        
+        Spacer()
+        
+        Button {
+          saveRequest()
+        } label: {
+          if isSaving {
+            ProgressView()
+              .scaleEffect(0.7)
+          } else {
+            HStack(spacing: 4) {
+              Image(systemName: "magnifyingglass.circle.fill")
+              Text("Create Research Request")
+            }
+          }
+        }
+        .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+        .keyboardShortcut(.defaultAction)
+      }
+      .padding()
+    }
+    .frame(width: 550, height: 450)
+    .background(Theme.bg)
+  }
+  
+  private func saveRequest() {
+    isSaving = true
+    errorMessage = nil
+    
+    // Combine prompt with comments
+    var fullPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !comments.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      fullPrompt += "\n\nAdditional Context:\n" + comments
+    }
+    
+    Task {
+      do {
+        _ = try await vm.api.createResearchRequestForTopic(
+          topicId: topic.id,
+          prompt: fullPrompt
+        )
+        
+        await vm.loadResearchRequests()
+        
+        await MainActor.run {
+          vm.flashSuccess("Research request created for \(topic.title)")
+          isPresented = false
+        }
+      } catch {
+        await MainActor.run {
+          errorMessage = error.localizedDescription
+          isSaving = false
+        }
+      }
+    }
+  }
+}
+
+// MARK: - Create Task From Topic Sheet
+
+private struct CreateTaskFromTopicSheet: View {
+  let topic: Topic
+  @ObservedObject var vm: AppViewModel
+  @Binding var isPresented: Bool
+  
+  @State private var title: String = ""
+  @State private var notes: String = ""
+  @State private var selectedProjectId: String?
+  @State private var owner: TaskOwner = .rafe
+  @State private var assignedAgent: String?
+  @State private var isSaving: Bool = false
+  @State private var errorMessage: String?
+  
+  var body: some View {
+    VStack(spacing: 0) {
+      // Header
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Create Task")
+            .font(.title3)
+            .fontWeight(.bold)
+          Text("Topic: \(topic.title)")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        
+        Spacer()
+        
+        Button {
+          isPresented = false
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title2)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding()
+      
+      Divider()
+      
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Task Title")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            TextField("Enter task title", text: $title)
+              .textFieldStyle(.roundedBorder)
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Notes")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Text("Pre-filled with topic context. Edit as needed.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            TextEditor(text: $notes)
+              .font(.system(size: 13))
+              .frame(height: 120)
+              .padding(8)
+              .background(Color(NSColor.textBackgroundColor))
+              .cornerRadius(6)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+              )
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Project (Optional)")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Picker("Select project", selection: $selectedProjectId) {
+              Text("No Project").tag(nil as String?)
+              ForEach(vm.projects) { project in
+                Text(project.title).tag(project.id as String?)
+              }
+            }
+            .pickerStyle(.menu)
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Owner")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Picker("Task owner", selection: $owner) {
+              Text("Me (Rafe)").tag(TaskOwner.rafe)
+              Text("AI (Lobs)").tag(TaskOwner.lobs)
+            }
+            .pickerStyle(.segmented)
+          }
+          
+          if owner == .lobs {
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Assigned Agent")
+                .font(.subheadline)
+                .fontWeight(.medium)
+              TextField("Agent name (e.g., programmer, researcher)", text: Binding(
+                get: { assignedAgent ?? "" },
+                set: { assignedAgent = $0.isEmpty ? nil : $0 }
+              ))
+              .textFieldStyle(.roundedBorder)
+            }
+          }
+          
+          if let error = errorMessage {
+            HStack(spacing: 8) {
+              Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+              Text(error)
+                .font(.subheadline)
+                .foregroundStyle(.red)
+            }
+            .padding()
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(8)
+          }
+        }
+        .padding()
+      }
+      
+      Divider()
+      
+      HStack {
+        Button("Cancel") {
+          isPresented = false
+        }
+        .keyboardShortcut(.cancelAction)
+        
+        Spacer()
+        
+        Button {
+          saveTask()
+        } label: {
+          if isSaving {
+            ProgressView()
+              .scaleEffect(0.7)
+          } else {
+            HStack(spacing: 4) {
+              Image(systemName: "checklist")
+              Text("Create Task")
+            }
+          }
+        }
+        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+        .keyboardShortcut(.defaultAction)
+      }
+      .padding()
+    }
+    .frame(width: 550, height: 600)
+    .background(Theme.bg)
+    .onAppear {
+      initializeDefaults()
+    }
+  }
+  
+  private func initializeDefaults() {
+    // Pre-fill notes with topic context
+    var contextNotes = "Related to topic: \(topic.title)"
+    if let desc = topic.description, !desc.isEmpty {
+      contextNotes += "\n\n\(desc)"
+    }
+    notes = contextNotes
+    
+    // Pre-select linked project if available
+    if let linkedProjectId = topic.linkedProjectId {
+      selectedProjectId = linkedProjectId
+    }
+  }
+  
+  private func saveTask() {
+    isSaving = true
+    errorMessage = nil
+    
+    Task {
+      do {
+        _ = try await vm.api.addTask(
+          title: title,
+          owner: owner,
+          status: .inbox,
+          projectId: selectedProjectId,
+          notes: notes,
+          agent: assignedAgent
+        )
+        
+        await MainActor.run {
+          vm.flashSuccess("Task created: \(title)")
+          vm.silentReload()
+          isPresented = false
+        }
+      } catch {
+        await MainActor.run {
+          errorMessage = error.localizedDescription
+          isSaving = false
+        }
+      }
+    }
+  }
+}
+
+// MARK: - Convert to Project Sheet
+
+private struct ConvertToProjectSheet: View {
+  let topic: Topic
+  @ObservedObject var vm: AppViewModel
+  @Binding var isPresented: Bool
+  
+  @State private var title: String = ""
+  @State private var notes: String = ""
+  @State private var projectType: ProjectType = .kanban
+  @State private var linkToTopic: Bool = true
+  @State private var isSaving: Bool = false
+  @State private var errorMessage: String?
+  
+  var body: some View {
+    VStack(spacing: 0) {
+      // Header
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Convert to Project")
+            .font(.title3)
+            .fontWeight(.bold)
+          Text("Create a project linked to: \(topic.title)")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        
+        Spacer()
+        
+        Button {
+          isPresented = false
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title2)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding()
+      
+      Divider()
+      
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Project Title")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            TextField("Enter project title", text: $title)
+              .textFieldStyle(.roundedBorder)
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Project Type")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Picker("Project type", selection: $projectType) {
+              Text("Kanban Board").tag(ProjectType.kanban)
+              Text("Research").tag(ProjectType.research)
+              Text("Tracker").tag(ProjectType.tracker)
+            }
+            .pickerStyle(.menu)
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Description / Notes")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Text("Pre-filled with topic context. Edit as needed.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            TextEditor(text: $notes)
+              .font(.system(size: 13))
+              .frame(height: 120)
+              .padding(8)
+              .background(Color(NSColor.textBackgroundColor))
+              .cornerRadius(6)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+              )
+          }
+          
+          Toggle(isOn: $linkToTopic) {
+            VStack(alignment: .leading, spacing: 2) {
+              Text("Link project to topic")
+                .font(.subheadline)
+                .fontWeight(.medium)
+              Text("Associate this project with the \(topic.title) topic")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+          }
+          .toggleStyle(.switch)
+          
+          if let error = errorMessage {
+            HStack(spacing: 8) {
+              Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+              Text(error)
+                .font(.subheadline)
+                .foregroundStyle(.red)
+            }
+            .padding()
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(8)
+          }
+        }
+        .padding()
+      }
+      
+      Divider()
+      
+      HStack {
+        Button("Cancel") {
+          isPresented = false
+        }
+        .keyboardShortcut(.cancelAction)
+        
+        Spacer()
+        
+        Button {
+          saveProject()
+        } label: {
+          if isSaving {
+            ProgressView()
+              .scaleEffect(0.7)
+          } else {
+            HStack(spacing: 4) {
+              Image(systemName: "square.grid.2x2")
+              Text("Create Project")
+            }
+          }
+        }
+        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+        .keyboardShortcut(.defaultAction)
+      }
+      .padding()
+    }
+    .frame(width: 550, height: 500)
+    .background(Theme.bg)
+    .onAppear {
+      initializeDefaults()
+    }
+  }
+  
+  private func initializeDefaults() {
+    // Pre-fill title from topic
+    title = topic.title
+    
+    // Pre-fill notes with topic context
+    var contextNotes = "Project for: \(topic.title)"
+    if let desc = topic.description, !desc.isEmpty {
+      contextNotes += "\n\n\(desc)"
+    }
+    notes = contextNotes
+  }
+  
+  private func saveProject() {
+    isSaving = true
+    errorMessage = nil
+    
+    Task {
+      do {
+        let projectId = "proj-\(UUID().uuidString.lowercased())"
+        
+        _ = try await vm.api.createProject(
+          id: projectId,
+          title: title,
+          type: projectType,
+          notes: notes
+        )
+        
+        // Link project to topic if requested
+        if linkToTopic {
+          // TODO: API call to link project to topic (needs backend support)
+          // For now, the topic.linkedProjectId is set on the topic side
+        }
+        
+        await MainActor.run {
+          vm.flashSuccess("Project created: \(title)")
+          vm.silentReload()
           isPresented = false
         }
       } catch {

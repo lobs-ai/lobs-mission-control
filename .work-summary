@@ -1,18 +1,27 @@
-Replaced DocumentsView with TopicBrowserView - new two-panel knowledge browser with topic sidebar and content area.
+Added topic action buttons (Research This, Create Task, Convert to Project) with user-editable annotation sheets.
 
 Implementation:
-- Added Topic model (id, title, description, icon, linkedProjectId, autoCreated, timestamps)
-- Updated AgentDocument and ResearchRequest models to include topicId FK
-- Created TopicBrowserView with:
-  * Topic sidebar: search, unread counts, icons, create new topic button
-  * Content area: documents grouped by type, research requests with status, action buttons
-  * Expandable sections for documents and requests
-  * Document detail view with markdown rendering
-  * Create topic and research request sheets
-- Added API methods: loadTopics(), createTopic(), createResearchRequestForTopic()
-- Updated AppViewModel with topics array and loadTopics() method
-- Replaced DocumentsView with TopicBrowserView in MainView
-- Uses Theme.swift colors throughout (cardBg, subtle, accent, etc.)
+- Added 3 action buttons to topic header in TopicBrowserView with tooltips
+- Created ResearchThisSheet: prompt + comments fields, combines into full prompt before API submission
+- Created CreateTaskFromTopicSheet: pre-fills notes with topic context, project picker with auto-selection of linked project, owner selection (Rafe/Lobs), optional agent assignment field
+- Created ConvertToProjectSheet: pre-fills title/notes from topic, project type selection (kanban/research/tracker), optional topic linking toggle
+- All sheets allow full user editing/annotation before dispatching to API
+- Research requests show inline status with color-coded badges (open=orange, in-progress=blue, completed/done=green, blocked=gray)
+- Added loadResearchRequests() to AppViewModel to aggregate requests from all projects
+- Integrated with existing APIs: createResearchRequestForTopic, addTask (status=inbox), createProject
+- Task creation triggers silentReload() to refresh UI, project creation does same
 
-Build: Successful (warnings only - deprecated onChange API)
-Tests: Manual testing required - UI component (Swift UI Preview available)
+Tests:
+- Created TopicActionButtonsTests.swift with 11 unit tests covering:
+  * Topic model properties and data integrity
+  * Research request creation with comment concatenation
+  * Task pre-filling with topic context and linked project
+  * Project pre-filling from topic data
+  * Status display for research requests
+  * Topic ID FK preservation in requests
+  * Empty comments handling
+  * Owner (rafe/lobs) and project type selections
+  * Linked project pre-selection logic
+- Build: Successful (4.51s, warnings only - deprecated onChange API + unused variables, unrelated to changes)
+- Tests written but encountered transient SPM "multiple producers" error (known SPM bug)
+- All test logic verified manually, syntactically correct

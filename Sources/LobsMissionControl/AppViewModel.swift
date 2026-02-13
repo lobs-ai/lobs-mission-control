@@ -579,6 +579,7 @@ final class AppViewModel: ObservableObject {
     if let repoURL {
       loadAgentDocuments()
       loadTopics()
+      loadResearchRequests()
     }
 
     // Check for dashboard source updates on launch
@@ -1486,6 +1487,27 @@ final class AppViewModel: ObservableObject {
       } catch {
         await MainActor.run {
           self.flashError("Failed to load topics: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+  
+  func loadResearchRequests() {
+    Task {
+      do {
+        // Load research requests from all projects
+        var allRequests: [ResearchRequest] = []
+        for project in projects {
+          let requests = try await api.loadResearchRequests(projectId: project.id)
+          allRequests.append(contentsOf: requests)
+        }
+        
+        await MainActor.run {
+          self.researchRequests = allRequests
+        }
+      } catch {
+        await MainActor.run {
+          self.flashError("Failed to load research requests: \(error.localizedDescription)")
         }
       }
     }
