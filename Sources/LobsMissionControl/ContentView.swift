@@ -1291,8 +1291,9 @@ private struct ToolbarArea: View {
 
       // Project
       Menu {
-        ForEach(vm.sortedActiveProjects) { p in
-          let activeCount = vm.tasks.filter { $0.projectId == p.id && $0.status == .active }.count
+        let activeProjects = vm.sortedActiveProjects
+        ForEach(activeProjects, id: \.id) { p in
+          let activeCount = vm.tasks.filter { ($0.projectId ?? "default") == p.id && $0.status == .active }.count
           Button {
             vm.selectedProjectId = p.id
             vm.showOverview = false
@@ -1303,11 +1304,6 @@ private struct ToolbarArea: View {
               }
               Image(systemName: projectTypeIcon(p.resolvedType))
               Text(p.title)
-              if p.tracking == .github {
-                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                  .foregroundStyle(.blue)
-                  .help("Synced with GitHub Issues")
-              }
               if activeCount > 0 {
                 Text("\(activeCount)")
                   .font(.system(size: 10, weight: .bold))
@@ -1580,8 +1576,8 @@ private struct ToolbarArea: View {
               "Behind by \(vm.controlRepoBehind) commit\(vm.controlRepoBehind == 1 ? "" : "s")")
       }
 
-      // GitHub sync status (for collaborative projects)
-      if vm.selectedProject?.tracking == .github {
+      // GitHub sync status (legacy compatibility)
+      if vm.isGitHubSyncing || vm.lastGitHubSyncAt != nil || vm.lastGitHubSyncError != nil {
         if vm.isGitHubSyncing {
           HStack(spacing: 4) {
             ProgressView()
@@ -2845,36 +2841,6 @@ private struct TaskTile: View {
               inlineTitle = task.title
               isEditingTitle = true
             }
-
-          // GitHub issue number badge (clickable link)
-          if let issueNumber = task.githubIssueNumber {
-            Button {
-              // Open GitHub issue in browser
-              if let project = vm.projects.first(where: { $0.id == task.projectId }),
-                 let repo = project.github?.repo {
-                let urlString = "https://github.com/\(repo)/issues/\(issueNumber)"
-                if let url = URL(string: urlString) {
-                  #if os(macOS)
-                  NSWorkspace.shared.open(url)
-                  #endif
-                }
-              }
-            } label: {
-              HStack(spacing: 2) {
-                Image(systemName: "link")
-                  .font(.system(size: 8))
-                Text("#\(issueNumber)")
-                  .font(.system(size: 9, weight: .medium, design: .monospaced))
-              }
-              .foregroundStyle(.secondary)
-              .padding(.horizontal, 4)
-              .padding(.vertical, 2)
-              .background(Color.secondary.opacity(0.1))
-              .clipShape(RoundedRectangle(cornerRadius: 3))
-            }
-            .buttonStyle(.plain)
-            .help("Open GitHub Issue #\(issueNumber)")
-          }
 
           Spacer()
           // Pin/star indicator + toggle

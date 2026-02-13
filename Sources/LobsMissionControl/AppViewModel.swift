@@ -357,6 +357,7 @@ final class AppViewModel: ObservableObject {
   @Published var isGitHubSyncing: Bool = false
   @Published var syncBlockedByUncommitted: Bool = false
   @Published var syncConflictFiles: [String] = []
+  @Published var syncConflictLastError: String? = nil
   @Published var syncConflictDetailsPresented: Bool = false
   @Published var controlRepoAhead: Int = 0
   @Published var controlRepoBehind: Int = 0
@@ -409,6 +410,7 @@ final class AppViewModel: ObservableObject {
   @Published var searchText: String = "" {
     didSet { invalidateFilteredTasksCache() }
   }
+  @Published var draggingTaskId: String? = nil
   @Published var multiSelectedTaskIds: Set<String> = []
 
   /// Whether multi-select mode is currently active.
@@ -727,7 +729,7 @@ final class AppViewModel: ObservableObject {
 
           return (loadedProjects, file.tasks, hasGitHubProject)
         } catch {
-          print("⚠️ [reload:silent] Failed loading projects/tasks from API: \(AppViewModel.describeLoadError(error))")
+          print("⚠️ [reload:silent] Failed loading projects/tasks from API: \(error.localizedDescription)")
           return nil
         }
       }.value
@@ -1235,7 +1237,7 @@ final class AppViewModel: ObservableObject {
 
           return (loadedProjects, file.tasks, hasGitHubProject, githubSyncTime)
         } catch {
-          print("⚠️ [reload] Failed loading projects/tasks from API: \(AppViewModel.describeLoadError(error))")
+          print("⚠️ [reload] Failed loading projects/tasks from API: \(error.localizedDescription)")
           return nil
         }
       }.value
@@ -1352,6 +1354,12 @@ final class AppViewModel: ObservableObject {
 
   private func autoCommitLocalChangesAsync(repoURL: URL) async throws {
     _ = repoURL
+  }
+
+  private func asyncCommitAndMaybePush(repoURL: URL, message: String, autoPush: Bool) async throws {
+    _ = repoURL
+    _ = message
+    _ = autoPush
   }
 
   /// Manually push local commits to origin.
@@ -1591,6 +1599,22 @@ final class AppViewModel: ObservableObject {
 
   func syncConflictRefreshFiles() {
     syncConflictFiles = []
+  }
+
+  func syncConflictResolveFileKeepingMine(_ path: String) {
+    _ = path
+  }
+
+  func syncConflictResolveFileUsingRemote(_ path: String) {
+    _ = path
+  }
+
+  func syncConflictAbortRebase() {
+    syncConflictDetailsPresented = false
+  }
+
+  func syncConflictContinueRebase() {
+    syncConflictDetailsPresented = false
   }
 
   func addTrackerItem(title: String, difficulty: String? = nil, tags: [String]? = nil, notes: String? = nil, links: [String]? = nil) {
@@ -2862,7 +2886,7 @@ final class AppViewModel: ObservableObject {
     }
   }
 
-  private func uniqueProjectId(for title: String) -> String {
+  func uniqueProjectId(for title: String) -> String {
     func slugify(_ s: String) -> String {
       let lower = s.lowercased()
       var out = ""

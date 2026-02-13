@@ -49,12 +49,13 @@ struct SyncConflictDetailsView: View {
         }
         .padding(.vertical, 6)
       } else {
+        let files = Array(vm.syncConflictFiles)
         Text("Conflicted files")
           .font(.subheadline)
           .fontWeight(.semibold)
 
         List {
-          ForEach(vm.syncConflictFiles, id: \.self) { path in
+          ForEach(files, id: \.self) { path in
             HStack(spacing: 10) {
               Text(path)
                 .font(.system(size: 12, weight: .medium, design: .monospaced))

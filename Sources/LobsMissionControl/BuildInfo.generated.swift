@@ -2,5 +2,5 @@
 // This file is tracked in git so the app always compiles, but the commit hash
 // gets updated before each build to embed the current HEAD.
 enum BuildInfo {
-  static let builtCommit = "d456da678efcc7a8768ec4c0c4f330409ae6d9ed"
+  static let builtCommit = "dafa4055ab4269a5ceddbecba83d7bd7d2a79031"
 }
