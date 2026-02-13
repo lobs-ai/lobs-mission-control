@@ -157,41 +157,8 @@ struct DashboardTask: Codable, Identifiable, Hashable {
   var createdAt: Date
   var updatedAt: Date
 
-  // Custom decoding to handle legacy tasks missing createdAt or owner
-  init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-
-    id = try container.decode(String.self, forKey: .id)
-    title = try container.decode(String.self, forKey: .title)
-    status = try container.decode(TaskStatus.self, forKey: .status)
-    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
-
-    // Default owner to "lobs" if missing (legacy tasks)
-    owner = (try? container.decode(TaskOwner.self, forKey: .owner)) ?? .lobs
-
-    // Default createdAt to updatedAt if missing (legacy tasks)
-    createdAt = (try? container.decode(Date.self, forKey: .createdAt)) ?? updatedAt
-
-    // Optional fields
-    workState = try? container.decode(WorkState.self, forKey: .workState)
-    reviewState = try? container.decode(ReviewState.self, forKey: .reviewState)
-    projectId = try? container.decode(String.self, forKey: .projectId)
-    artifactPath = try? container.decode(String.self, forKey: .artifactPath)
-    notes = try? container.decode(String.self, forKey: .notes)
-    startedAt = try? container.decode(Date.self, forKey: .startedAt)
-    finishedAt = try? container.decode(Date.self, forKey: .finishedAt)
-    sortOrder = try? container.decode(Int.self, forKey: .sortOrder)
-    blockedBy = try? container.decode([String].self, forKey: .blockedBy)
-    pinned = try? container.decode(Bool.self, forKey: .pinned)
-    shape = try? container.decode(TaskShape.self, forKey: .shape)
-    agent = try? container.decode(String.self, forKey: .agent)
-  }
-
-  private enum CodingKeys: String, CodingKey {
-    case id, title, status, owner, createdAt, updatedAt
-    case workState, reviewState, projectId, artifactPath, notes
-    case startedAt, finishedAt, sortOrder, blockedBy, pinned, shape, agent
-  }
+  // No custom CodingKeys needed - let .convertFromSnakeCase handle snake_case conversion
+  // This allows the decoder to automatically convert created_at → createdAt, work_state → workState, etc.
 
   // Memberwise initializer for creating tasks programmatically
   init(
@@ -289,36 +256,9 @@ struct Project: Codable, Identifiable, Hashable {
 
   /// Resolved type (defaults to kanban for backwards compatibility).
   var resolvedType: ProjectType { type ?? .kanban }
-
-  enum CodingKeys: String, CodingKey {
-    case id, title, createdAt, updatedAt, notes, archived, type, sortOrder
-  }
   
-  init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    
-    id = try container.decode(String.self, forKey: .id)
-    title = try container.decode(String.self, forKey: .title)
-    createdAt = try container.decode(Date.self, forKey: .createdAt)
-    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
-    notes = try? container.decode(String.self, forKey: .notes)
-    archived = try? container.decode(Bool.self, forKey: .archived)
-    type = try? container.decode(ProjectType.self, forKey: .type)
-    sortOrder = try? container.decode(Int.self, forKey: .sortOrder)
-  }
-  
-  func encode(to encoder: Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-    
-    try container.encode(id, forKey: .id)
-    try container.encode(title, forKey: .title)
-    try container.encode(createdAt, forKey: .createdAt)
-    try container.encode(updatedAt, forKey: .updatedAt)
-    try container.encodeIfPresent(notes, forKey: .notes)
-    try container.encodeIfPresent(archived, forKey: .archived)
-    try container.encodeIfPresent(type, forKey: .type)
-    try container.encodeIfPresent(sortOrder, forKey: .sortOrder)
-  }
+  // No custom CodingKeys needed - let .convertFromSnakeCase handle snake_case conversion
+  // This allows the decoder to automatically convert created_at → createdAt, sort_order → sortOrder, etc.
   
   init(id: String, title: String, createdAt: Date, updatedAt: Date, notes: String? = nil, archived: Bool? = nil, type: ProjectType? = nil, sortOrder: Int? = nil) {
     self.id = id
@@ -465,29 +405,7 @@ struct ResearchRequest: Codable, Identifiable, Hashable {
     (editHistory?.count ?? 0) + 1
   }
 
-  enum CodingKeys: String, CodingKey {
-    case id, projectId, tileId, prompt, status, response, author, priority
-    case deliverables, editHistory, parentRequestId, assignedWorker
-    case createdAt, updatedAt
-  }
-
-  init(from decoder: Decoder) throws {
-    let c = try decoder.container(keyedBy: CodingKeys.self)
-    id = try c.decode(String.self, forKey: .id)
-    projectId = try c.decodeIfPresent(String.self, forKey: .projectId) ?? "unknown"
-    tileId = try c.decodeIfPresent(String.self, forKey: .tileId)
-    prompt = try c.decode(String.self, forKey: .prompt)
-    status = try c.decode(ResearchRequestStatus.self, forKey: .status)
-    response = try c.decodeIfPresent(String.self, forKey: .response)
-    author = try c.decodeIfPresent(String.self, forKey: .author)
-    priority = try c.decodeIfPresent(ResearchPriority.self, forKey: .priority)
-    deliverables = try c.decodeIfPresent([RequestDeliverable].self, forKey: .deliverables)
-    editHistory = try c.decodeIfPresent([RequestEditVersion].self, forKey: .editHistory)
-    parentRequestId = try c.decodeIfPresent(String.self, forKey: .parentRequestId)
-    assignedWorker = try c.decodeIfPresent(String.self, forKey: .assignedWorker)
-    createdAt = try c.decode(Date.self, forKey: .createdAt)
-    updatedAt = try c.decode(Date.self, forKey: .updatedAt)
-  }
+  // No custom CodingKeys needed - let .convertFromSnakeCase handle snake_case conversion
 
   init(id: String, projectId: String, tileId: String? = nil, prompt: String, status: ResearchRequestStatus, response: String? = nil, author: String? = nil, priority: ResearchPriority? = nil, deliverables: [RequestDeliverable]? = nil, editHistory: [RequestEditVersion]? = nil, parentRequestId: String? = nil, assignedWorker: String? = nil, createdAt: Date, updatedAt: Date) {
     self.id = id
