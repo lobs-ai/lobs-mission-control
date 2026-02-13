@@ -1,5 +1,39 @@
 import Foundation
 
+// MARK: - Software Updates
+
+struct RepoUpdateInfo: Codable, Identifiable {
+  let name: String
+  let path: String
+  let localCommit: String
+  let localMessage: String
+  let localDate: String
+  let remoteCommit: String?
+  let remoteMessage: String?
+  let remoteDate: String?
+  let behind: Int
+  let ahead: Int
+  let hasUpdate: Bool
+  let branch: String
+  let error: String?
+  
+  var id: String { name }
+}
+
+struct UpdateCheckResponse: Codable {
+  let repos: [RepoUpdateInfo]
+  let hasUpdates: Bool
+  let checkedAt: String
+}
+
+struct UpdatePullResponse: Codable {
+  let repo: String
+  let success: Bool
+  let output: String
+  let newCommit: String?
+  let needsRestart: Bool
+}
+
 // MARK: - System Overview
 // Note: APIService decoder uses .convertFromSnakeCase, so no manual CodingKeys needed
 // for simple snake_case → camelCase conversions.

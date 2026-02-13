@@ -11,7 +11,7 @@ class StatusViewModel: ObservableObject {
   @Published var error: String?
   @Published var lastRefresh: Date?
   
-  private let apiService: APIService
+  let apiService: APIService
   private var refreshTimer: Timer?
   
   init(apiService: APIService) {

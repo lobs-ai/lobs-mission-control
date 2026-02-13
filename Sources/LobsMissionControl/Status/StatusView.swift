@@ -101,6 +101,9 @@ struct StatusView: View {
               WorkersCard(workers: viewModel.overview?.workers)
             }
             
+            // Software Updates
+            UpdatesSection(apiService: viewModel.apiService)
+            
             // Agents grid
             if let agents = viewModel.overview?.agents, !agents.isEmpty {
               VStack(alignment: .leading, spacing: 12) {
@@ -720,5 +723,294 @@ private struct StatRow: View {
       Text(value)
         .font(.caption.bold())
     }
+  }
+}
+
+// MARK: - Software Updates Section
+
+private struct UpdatesSection: View {
+  let apiService: APIService
+  @State private var updateCheck: UpdateCheckResponse?
+  @State private var isChecking = false
+  @State private var pullingRepo: String?
+  @State private var pullResult: UpdatePullResponse?
+  @State private var error: String?
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack {
+        Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+          .font(.title3)
+          .foregroundStyle(.blue)
+        Text("Software Updates")
+          .font(.title3.bold())
+        
+        Spacer()
+        
+        if isChecking {
+          ProgressView()
+            .scaleEffect(0.7)
+        }
+        
+        Button {
+          Task { await checkUpdates() }
+        } label: {
+          Label("Check Now", systemImage: "arrow.clockwise")
+            .font(.caption)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.blue)
+        .disabled(isChecking)
+      }
+      .padding(.horizontal, 4)
+      
+      if let error = error {
+        HStack {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .foregroundStyle(.orange)
+          Text(error)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+      }
+      
+      if let check = updateCheck {
+        if check.hasUpdates {
+          // Show banner
+          HStack(spacing: 8) {
+            Image(systemName: "arrow.down.circle.fill")
+              .foregroundStyle(.blue)
+            Text("Updates available")
+              .font(.subheadline.bold())
+            Spacer()
+            Text("\(check.repos.filter(\.hasUpdate).count) repo(s)")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          .padding(12)
+          .background(Color.blue.opacity(0.1))
+          .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        
+        LazyVGrid(columns: [
+          GridItem(.flexible()),
+          GridItem(.flexible()),
+          GridItem(.flexible())
+        ], spacing: 12) {
+          ForEach(check.repos) { repo in
+            RepoCard(
+              repo: repo,
+              isPulling: pullingRepo == repo.name,
+              onPull: { Task { await pullRepo(repo.name) } }
+            )
+          }
+        }
+        
+        if let result = pullResult {
+          PullResultBanner(result: result)
+        }
+      } else if !isChecking {
+        CardContainer {
+          HStack {
+            Image(systemName: "arrow.triangle.2.circlepath")
+              .font(.title2)
+              .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+              Text("No update check yet")
+                .font(.subheadline)
+              Text("Click \"Check Now\" to scan for updates")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+          }
+          .padding(.vertical, 8)
+        }
+      }
+    }
+    .onAppear {
+      Task { await checkUpdates() }
+    }
+  }
+  
+  private func checkUpdates() async {
+    isChecking = true
+    error = nil
+    defer { isChecking = false }
+    
+    do {
+      updateCheck = try await apiService.checkForUpdates()
+    } catch {
+      self.error = "Failed to check updates: \(error.localizedDescription)"
+    }
+  }
+  
+  private func pullRepo(_ name: String) async {
+    pullingRepo = name
+    pullResult = nil
+    defer { pullingRepo = nil }
+    
+    do {
+      pullResult = try await apiService.pullUpdate(repo: name)
+      // Refresh the update check after pulling
+      if pullResult?.success == true {
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        updateCheck = try await apiService.checkForUpdates()
+      }
+    } catch {
+      pullResult = UpdatePullResponse(
+        repo: name, success: false,
+        output: error.localizedDescription,
+        newCommit: nil, needsRestart: false
+      )
+    }
+  }
+}
+
+private struct RepoCard: View {
+  let repo: RepoUpdateInfo
+  let isPulling: Bool
+  let onPull: () -> Void
+  
+  var body: some View {
+    CardContainer {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack {
+          Image(systemName: repoIcon)
+            .font(.body)
+            .foregroundStyle(repo.hasUpdate ? .blue : .green)
+          Text(repo.name)
+            .font(.subheadline.bold())
+          Spacer()
+          if repo.hasUpdate {
+            Text("\(repo.behind) behind")
+              .font(.caption2.bold())
+              .padding(.horizontal, 6)
+              .padding(.vertical, 2)
+              .background(Color.blue.opacity(0.2))
+              .foregroundStyle(.blue)
+              .clipShape(Capsule())
+          } else if repo.error == nil {
+            Image(systemName: "checkmark.circle.fill")
+              .font(.caption)
+              .foregroundStyle(.green)
+          }
+        }
+        
+        if let error = repo.error {
+          Text(error)
+            .font(.caption)
+            .foregroundStyle(.red)
+        } else {
+          VStack(alignment: .leading, spacing: 4) {
+            HStack {
+              Text(repo.localCommit)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+              Text(repo.localMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            
+            if repo.hasUpdate, let remoteMsg = repo.remoteMessage, let remoteCommit = repo.remoteCommit {
+              HStack {
+                Image(systemName: "arrow.down")
+                  .font(.caption2)
+                  .foregroundStyle(.blue)
+                Text(remoteCommit)
+                  .font(.system(.caption, design: .monospaced))
+                  .foregroundStyle(.blue)
+                Text(remoteMsg)
+                  .font(.caption)
+                  .foregroundStyle(.blue)
+                  .lineLimit(1)
+              }
+            }
+            
+            Text("branch: \(repo.branch)")
+              .font(.caption2)
+              .foregroundStyle(.tertiary)
+          }
+          
+          if repo.hasUpdate {
+            Button {
+              onPull()
+            } label: {
+              HStack {
+                if isPulling {
+                  ProgressView()
+                    .scaleEffect(0.6)
+                } else {
+                  Image(systemName: "arrow.down.circle.fill")
+                }
+                Text(isPulling ? "Pulling..." : "Pull Update")
+              }
+              .font(.caption.bold())
+              .frame(maxWidth: .infinity)
+              .padding(.vertical, 6)
+              .background(Color.blue.opacity(0.2))
+              .foregroundStyle(.blue)
+              .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .disabled(isPulling)
+          }
+        }
+      }
+    }
+  }
+  
+  private var repoIcon: String {
+    switch repo.name {
+    case "lobs-server": return "server.rack"
+    case "lobs-mission-control": return "desktopcomputer"
+    case "lobs-mobile": return "iphone"
+    default: return "folder.fill"
+    }
+  }
+}
+
+private struct PullResultBanner: View {
+  let result: UpdatePullResponse
+  
+  var body: some View {
+    HStack(spacing: 8) {
+      Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+        .foregroundStyle(result.success ? .green : .red)
+      
+      VStack(alignment: .leading, spacing: 2) {
+        Text(result.success ? "Updated \(result.repo)" : "Failed to update \(result.repo)")
+          .font(.caption.bold())
+        
+        if let newCommit = result.newCommit {
+          Text("Now at \(newCommit)")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        
+        if result.needsRestart {
+          Text("⚠️ Server restart required to apply changes")
+            .font(.caption2)
+            .foregroundStyle(.orange)
+        }
+        
+        if !result.success {
+          Text(result.output)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(3)
+        }
+      }
+      
+      Spacer()
+    }
+    .padding(12)
+    .background((result.success ? Color.green : Color.red).opacity(0.1))
+    .clipShape(RoundedRectangle(cornerRadius: 8))
   }
 }

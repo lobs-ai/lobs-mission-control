@@ -1821,6 +1821,21 @@ final class APIService {
     )
   }
   
+  func checkForUpdates() async throws -> UpdateCheckResponse {
+    return try await request(
+      method: "GET",
+      path: "/api/status/updates"
+    )
+  }
+  
+  func pullUpdate(repo: String) async throws -> UpdatePullResponse {
+    return try await request(
+      method: "POST",
+      path: "/api/status/updates/pull",
+      queryItems: [URLQueryItem(name: "repo", value: repo)]
+    )
+  }
+  
   func pauseOrchestrator() async throws {
     try await requestVoid(
       method: "POST",
