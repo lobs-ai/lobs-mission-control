@@ -1092,111 +1092,124 @@ private struct NewTaskSheet: View {
   
   var body: some View {
     VStack(spacing: 0) {
-      // Header
-      HStack {
-        Text("New Task")
-          .font(.title2.bold())
-        
-        Spacer()
-        
-        Button {
-          isPresented = false
-        } label: {
-          Image(systemName: "xmark.circle.fill")
-            .font(.title3)
-            .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
+      sheetHeader
+      Divider()
+      sheetForm
+      Divider()
+      sheetFooter
+    }
+    .frame(width: 500, height: 500)
+    .background(Color(NSColor.controlBackgroundColor))
+  }
+
+  private var sheetHeader: some View {
+    HStack {
+      Text("New Task")
+        .font(.title2.bold())
+      Spacer()
+      Button {
+        isPresented = false
+      } label: {
+        Image(systemName: "xmark.circle.fill")
+          .font(.title3)
+          .foregroundStyle(.secondary)
+      }
+      .buttonStyle(.plain)
+    }
+    .padding()
+    .background(Color(NSColor.windowBackgroundColor))
+  }
+
+  private var sheetForm: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        titleField
+        projectPicker
+        notesField
+        errorBanner
       }
       .padding()
-      .background(Color(NSColor.windowBackgroundColor))
-      
-      Divider()
-      
-      // Form
-      ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
-          // Title field
-          VStack(alignment: .leading, spacing: 8) {
-            Text("Title")
-              .font(.subheadline.bold())
-            TextField("What needs to be done?", text: $title)
-              .textFieldStyle(.plain)
-              .padding(10)
-              .background(Color(NSColor.controlBackgroundColor))
-              .clipShape(RoundedRectangle(cornerRadius: 8))
-              .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                  .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-              )
-          }
-          
-          // Project picker
-          VStack(alignment: .leading, spacing: 8) {
-            Text("Project")
-              .font(.subheadline.bold())
-            
-            Picker("Select Project", selection: $selectedProjectId) {
-              Text("No Project").tag(nil as String?)
-              
-              ForEach(vm.sortedActiveProjects, id: \.id) { project in
-                Text(project.name).tag(project.id as String?)
-              }
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
-            .background(Color(NSColor.controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-              RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-            )
-          }
-          
-          // Notes field
-          VStack(alignment: .leading, spacing: 8) {
-            Text("Notes (Optional)")
-              .font(.subheadline.bold())
-            
-            TextEditor(text: $notes)
-              .font(.body)
-              .frame(minHeight: 100)
-              .padding(8)
-              .background(Color(NSColor.controlBackgroundColor))
-              .clipShape(RoundedRectangle(cornerRadius: 8))
-              .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                  .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-              )
-          }
-          
-          // Error message
-          if let error = errorMessage {
-            HStack(spacing: 8) {
-              Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-              Text(error)
-                .font(.caption)
-                .foregroundStyle(.red)
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.red.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-          }
+    }
+  }
+
+  private var titleField: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Title")
+        .font(.subheadline.bold())
+      TextField("What needs to be done?", text: $title)
+        .textFieldStyle(.plain)
+        .padding(10)
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+          RoundedRectangle(cornerRadius: 8)
+            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+    }
+  }
+
+  private var projectPicker: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Project")
+        .font(.subheadline.bold())
+      Picker("Select Project", selection: $selectedProjectId) {
+        Text("No Project").tag(nil as String?)
+        ForEach(vm.sortedActiveProjects, id: \.id) { project in
+          Text(project.title).tag(project.id as String?)
         }
-        .padding()
       }
-      
-      Divider()
-      
-      // Footer buttons
-      HStack(spacing: 12) {
-        Button("Cancel") {
-          isPresented = false
-        }
-        .keyboardShortcut(.escape)
+      .pickerStyle(.menu)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(8)
+      .background(Color(NSColor.controlBackgroundColor))
+      .clipShape(RoundedRectangle(cornerRadius: 8))
+      .overlay(
+        RoundedRectangle(cornerRadius: 8)
+          .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+      )
+    }
+  }
+
+  private var notesField: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Notes (Optional)")
+        .font(.subheadline.bold())
+      TextEditor(text: $notes)
+        .font(.body)
+        .frame(minHeight: 100)
+        .padding(8)
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+          RoundedRectangle(cornerRadius: 8)
+            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+    }
+  }
+
+  @ViewBuilder
+  private var errorBanner: some View {
+    if let error = errorMessage {
+      HStack(spacing: 8) {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .foregroundStyle(.red)
+        Text(error)
+          .font(.caption)
+          .foregroundStyle(.red)
+      }
+      .padding(10)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(Color.red.opacity(0.1))
+      .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+  }
+
+  private var sheetFooter: some View {
+    HStack(spacing: 12) {
+      Button("Cancel") {
+        isPresented = false
+      }
+      .keyboardShortcut(.escape)
         
         Spacer()
         
@@ -1218,11 +1231,8 @@ private struct NewTaskSheet: View {
       }
       .padding()
       .background(Color(NSColor.windowBackgroundColor))
-    }
-    .frame(width: 500, height: 500)
-    .background(Color(NSColor.controlBackgroundColor))
   }
-  
+
   private func createTask() {
     guard !title.isEmpty else { return }
     
@@ -1242,7 +1252,7 @@ private struct NewTaskSheet: View {
         )
         
         // Reload tasks
-        await vm.loadTasks()
+        await MainActor.run { vm.reload() }
         
         // Close sheet on success
         await MainActor.run {

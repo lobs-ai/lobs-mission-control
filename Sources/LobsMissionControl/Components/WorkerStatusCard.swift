@@ -1,5 +1,62 @@
 import SwiftUI
 
+// MARK: - Row helpers (extracted from deleted OverviewView)
+
+private struct OverviewTaskRow: View {
+  let task: DashboardTask
+  let projectName: String?
+  var showTimestamp: Bool = false
+  var onTap: (() -> Void)? = nil
+
+  var body: some View {
+    Button(action: { onTap?() }) {
+      HStack(spacing: 10) {
+        Image(systemName: "circle.fill")
+          .font(.system(size: 6))
+          .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(task.title).font(.body)
+          if let proj = projectName {
+            Text(proj).font(.caption).foregroundStyle(.secondary)
+          }
+        }
+        Spacer()
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 8)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+  }
+}
+
+private struct OverviewResearchRow: View {
+  let request: ResearchRequest
+  let projectName: String?
+  var onTap: (() -> Void)? = nil
+
+  var body: some View {
+    Button(action: { onTap?() }) {
+      HStack(spacing: 10) {
+        Image(systemName: "circle.fill")
+          .font(.system(size: 6))
+          .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(request.prompt).font(.body).lineLimit(1)
+          if let proj = projectName {
+            Text(proj).font(.caption).foregroundStyle(.secondary)
+          }
+        }
+        Spacer()
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 8)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+  }
+}
+
 struct WorkerStatusCard: View {
   let status: WorkerStatus
   var history: WorkerHistory? = nil
@@ -262,12 +319,12 @@ struct WorkerStatusCard: View {
     }
     .padding(14)
     .background(
-      RoundedRectangle(cornerRadius: OTheme.cardRadius)
-        .fill(OTheme.cardBg)
+      RoundedRectangle(cornerRadius: Theme.cardRadius)
+        .fill(Theme.cardBg)
     )
     .overlay(
-      RoundedRectangle(cornerRadius: OTheme.cardRadius)
-        .stroke(isActive ? Color.green.opacity(0.2) : OTheme.border, lineWidth: isActive ? 1.5 : 0.5)
+      RoundedRectangle(cornerRadius: Theme.cardRadius)
+        .stroke(isActive ? Color.green.opacity(0.2) : Theme.border, lineWidth: isActive ? 1.5 : 0.5)
     )
 
     // Per-project usage breakdown
@@ -370,12 +427,12 @@ struct WorkerStatusCard: View {
         }
       }
       .background(
-        RoundedRectangle(cornerRadius: OTheme.cardRadius)
-          .fill(OTheme.cardBg)
+        RoundedRectangle(cornerRadius: Theme.cardRadius)
+          .fill(Theme.cardBg)
       )
       .overlay(
-        RoundedRectangle(cornerRadius: OTheme.cardRadius)
-          .stroke(OTheme.border, lineWidth: 0.5)
+        RoundedRectangle(cornerRadius: Theme.cardRadius)
+          .stroke(Theme.border, lineWidth: 0.5)
       )
       .sheet(isPresented: $showUsageDetail) {
         WorkerUsageDetailSheet(
@@ -770,11 +827,11 @@ private struct TimelineChart: View {
         .padding(.bottom, 6)
       }
     }
-    .background(OTheme.cardBg)
-    .clipShape(RoundedRectangle(cornerRadius: OTheme.cardRadius))
+    .background(Theme.cardBg)
+    .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
     .overlay(
-      RoundedRectangle(cornerRadius: OTheme.cardRadius)
-        .stroke(OTheme.border, lineWidth: 0.5)
+      RoundedRectangle(cornerRadius: Theme.cardRadius)
+        .stroke(Theme.border, lineWidth: 0.5)
     )
   }
 }
@@ -899,7 +956,7 @@ private struct OverviewTaskListSheet: View {
         .padding(.vertical, 6)
       }
     }
-    .background(OTheme.boardBg)
+    .background(Theme.boardBg)
   }
 }
 
@@ -955,7 +1012,7 @@ private struct OverviewResearchRequestListSheet: View {
         .padding(.vertical, 6)
       }
     }
-    .background(OTheme.boardBg)
+    .background(Theme.boardBg)
   }
 }
 
