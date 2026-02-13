@@ -21,8 +21,9 @@ struct CommandCenterView: View {
   @State private var upcomingEvents: [ScheduledEvent] = []
   @State private var recentMemories: [MemoryItem] = []
   @State private var showNewTaskSheet = false
-  @State private var showAIUsage = false
+  @State private var showAllActivitySheet = false
   @State private var showDetailedStats = false
+  @State private var selectedTask: DashboardTask? = nil
   
   private var lastVisit: Date {
     Date(timeIntervalSince1970: lastVisitTimestamp)
@@ -89,12 +90,101 @@ struct CommandCenterView: View {
       .sorted()
   }
   
-  // Completion rate (all-time)
-  private var completionRate: Double {
-    let completable = vm.tasks.filter { $0.status == .completed || $0.status == .active || $0.status == .waitingOn }
-    guard !completable.isEmpty else { return 0 }
-    let completed = completable.filter { $0.status == .completed }.count
-    return Double(completed) / Double(completable.count)
+  // MARK: - Stats
+  
+  private var activeTasksCount: Int {
+    vm.tasks.filter { $0.status == .active }.count
+  }
+  
+  private var completedThisWeek: Int {
+    let calendar = Calendar.current
+    var comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+    comps.weekday = 2 // Monday
+    let weekStart = calendar.date(from: comps) ?? Date()
+    let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? Date()
+    return vm.tasks.filter { task in
+      guard task.status == .completed else { return false }
+      let completionDate = task.finishedAt ?? task.updatedAt
+      return completionDate >= weekStart && completionDate < weekEnd
+    }.count
+  }
+  
+  private var blockedTasksCount: Int {
+    vm.tasks.filter { $0.workState == .blocked }.count
+  }
+  
+  private var inboxTasksCount: Int {
+    vm.tasks.filter { $0.status == .inbox }.count
+  }
+  
+  private var staleTasksCount: Int {
+    let cutoff = Date().addingTimeInterval(-7 * 86400)
+    return vm.tasks.filter { t in
+      (t.status == .active || t.status == .inbox) && t.updatedAt < cutoff
+    }.count
+  }
+  
+  // MARK: - Activity Feed
+  
+  fileprivate enum ActivityEvent: Identifiable {
+    case taskCompleted(DashboardTask)
+    case inboxItem(InboxItem)
+    case workerRun(WorkerHistoryRun)
+    
+    var id: String {
+      switch self {
+      case .taskCompleted(let t):
+        return "task-completed-\(t.id)-\(t.updatedAt.timeIntervalSince1970)"
+      case .inboxItem(let item):
+        return "inbox-\(item.id)-\(item.modifiedAt.timeIntervalSince1970)"
+      case .workerRun(let run):
+        return "worker-\(run.id)"
+      }
+    }
+    
+    var date: Date {
+      switch self {
+      case .taskCompleted(let t):
+        return t.finishedAt ?? t.updatedAt
+      case .inboxItem(let item):
+        return item.modifiedAt
+      case .workerRun(let run):
+        return run.endedAt ?? run.startedAt ?? Date.distantPast
+      }
+    }
+  }
+  
+  private var activityFeed: [ActivityEvent] {
+    let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+    var events: [ActivityEvent] = []
+    
+    // Task completions
+    for t in vm.tasks where t.status == .completed {
+      let completionDate = t.finishedAt ?? t.updatedAt
+      if completionDate >= weekAgo {
+        events.append(.taskCompleted(t))
+      }
+    }
+    
+    // Inbox items
+    for item in vm.inboxItems where item.modifiedAt >= weekAgo {
+      events.append(.inboxItem(item))
+    }
+    
+    // Worker runs
+    if let runs = vm.workerHistory?.runs {
+      for run in runs {
+        let d = run.endedAt ?? run.startedAt
+        if let d, d >= weekAgo {
+          events.append(.workerRun(run))
+        }
+      }
+    }
+    
+    return events
+      .sorted { $0.date > $1.date }
+      .prefix(25)
+      .map { $0 }
   }
   
   var body: some View {
@@ -162,84 +252,85 @@ struct CommandCenterView: View {
             }
             .padding(.horizontal, 24)
           }
-        
-          // Main grid of cards
-          LazyVGrid(columns: [
-            GridItem(.flexible()),
-            GridItem(.flexible())
-          ], spacing: 20) {
+          
           // While You Were Away (full width)
           if showWhileYouWereAway {
             WhileYouWereAwayCard(
               activity: activitySinceLastVisit,
               isExpanded: $whileYouWereAwayExpanded,
-              recentTasks: activeTasks.prefix(5).map { $0 }
+              recentTasks: activeTasks.prefix(5).map { $0 },
+              vm: vm
             )
-            .gridCellColumns(2)
+            .padding(.horizontal, 24)
           }
           
-          // Active Tasks
-          ActiveTasksCard(
-            tasks: activeTasks,
-            onViewAll: {
-              // Switch to first active project
-              if let firstProject = vm.sortedActiveProjects.first {
-                onSelectProject(firstProject.id)
-              }
-            }
+          // Stats Cards Row
+          StatsCardsRow(
+            activeTasksCount: activeTasksCount,
+            completedThisWeek: completedThisWeek,
+            blockedTasksCount: blockedTasksCount,
+            inboxCount: vm.unreadInboxCount,
+            inboxTasksCount: inboxTasksCount,
+            staleTasksCount: staleTasksCount,
+            onShowDetails: { showDetailedStats.toggle() }
           )
-          
-          // Inbox
-          InboxCard(
-            unreadCount: vm.unreadInboxCount,
-            recentItems: recentInboxItems,
-            onViewAll: { onOpenInbox?(nil) }
-          )
-          
-          // System Health
-          SystemHealthCard(
-            health: systemHealth,
-            onViewDetails: { onOpenStatus?() }
-          )
-          
-          // Team
-          TeamCard(
-            activeAgents: activeAgentsCount,
-            workingAgents: workingAgents,
-            onViewDetails: { onOpenTeam?() }
-          )
-          
-          // Upcoming Events
-          UpcomingEventsCard(
-            events: upcomingEvents
-          )
-          
-          // Recent Memories
-          RecentMemoriesCard(
-            memories: recentMemories,
-            onViewAll: { onOpenMemory?() }
-          )
-          
-          // AI Usage
-          AIUsageCard(
-            workerHistory: vm.workerHistory,
-            mainSessionUsage: vm.mainSessionUsage,
-            onViewDetails: { showAIUsage = true }
-          )
-          
-          // Analytics
-          AnalyticsCard(
-            tasksCount: vm.tasks.count,
-            completionRate: completionRate,
-            onViewDetails: { showDetailedStats = true }
-          )
-          }
           .padding(.horizontal, 24)
           
-          // Velocity Chart (full-width below grid)
-          VelocityChartView(tasks: vm.tasks)
-            .padding(.horizontal, 24)
+          // Detailed stats
+          if showDetailedStats {
+            DetailedStatsSection(vm: vm)
+              .padding(.horizontal, 24)
+              .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
+          }
           
+          // Recent Activity
+          ActivityFeedSection(
+            events: activityFeed,
+            vm: vm,
+            onShowAll: { showAllActivitySheet = true },
+            onOpenTask: { task in selectedTask = task },
+            onOpenInbox: { itemId in onOpenInbox?(itemId) }
+          )
+          .padding(.horizontal, 24)
+          
+          // Projects Grid
+          ProjectCardsSection(
+            projects: vm.sortedActiveProjects,
+            tasks: vm.tasks,
+            onSelectProject: onSelectProject
+          )
+          .padding(.horizontal, 24)
+          
+          // Bottom cards grid
+          LazyVGrid(columns: [
+            GridItem(.flexible()),
+            GridItem(.flexible())
+          ], spacing: 20) {
+            // System Health
+            SystemHealthCard(
+              health: systemHealth,
+              onViewDetails: { onOpenStatus?() }
+            )
+            
+            // Team
+            TeamCard(
+              activeAgents: activeAgentsCount,
+              workingAgents: workingAgents,
+              onViewDetails: { onOpenTeam?() }
+            )
+            
+            // Upcoming Events
+            UpcomingEventsCard(
+              events: upcomingEvents
+            )
+            
+            // Recent Memories
+            RecentMemoriesCard(
+              memories: recentMemories,
+              onViewAll: { onOpenMemory?() }
+            )
+          }
+          .padding(.horizontal, 24)
           .padding(.bottom, 28)
         }
       }
@@ -273,13 +364,22 @@ struct CommandCenterView: View {
     .sheet(isPresented: $showNewTaskSheet) {
       NewTaskSheet(vm: vm, isPresented: $showNewTaskSheet)
     }
-    .sheet(isPresented: $showAIUsage) {
-      AIUsageView(vm: vm, isPresented: $showAIUsage)
-        .frame(width: 900, height: 700)
+    .sheet(isPresented: $showAllActivitySheet) {
+      ActivitySheetView(
+        vm: vm,
+        events: activityFeed,
+        onOpenTask: { task in
+          selectedTask = task
+        },
+        onOpenInbox: { itemId in
+          onOpenInbox?(itemId)
+        }
+      )
+      .frame(minWidth: 640, minHeight: 620)
     }
-    .sheet(isPresented: $showDetailedStats) {
-      DetailedStatsView(tasks: vm.tasks, projects: vm.sortedActiveProjects)
-        .frame(width: 1200, height: 800)
+    .sheet(item: $selectedTask) { task in
+      TaskDetailSheet(task: task, vm: vm)
+        .frame(minWidth: 480, minHeight: 500)
     }
   }
   
@@ -303,6 +403,7 @@ private struct WhileYouWereAwayCard: View {
   let activity: (tasks: Int, inbox: Int, errors: Int)
   @Binding var isExpanded: Bool
   let recentTasks: [DashboardTask]
+  @ObservedObject var vm: AppViewModel
   
   var body: some View {
     HomeCardContainer {
@@ -369,7 +470,7 @@ private struct WhileYouWereAwayCard: View {
           Divider()
           
           VStack(alignment: .leading, spacing: 8) {
-            Text("Recent Activity")
+            Text("Completed Tasks")
               .font(.caption.bold())
               .foregroundStyle(.secondary)
             
@@ -382,9 +483,13 @@ private struct WhileYouWereAwayCard: View {
                   .font(.caption)
                   .lineLimit(1)
                 Spacer()
-                Text(timeAgoString(task.updatedAt))
-                  .font(.caption2)
-                  .foregroundStyle(.tertiary)
+                if let projectId = task.projectId {
+                  if let project = vm.projects.first(where: { $0.id == projectId }) {
+                    Text(project.title)
+                      .font(.caption2)
+                      .foregroundStyle(.tertiary)
+                  }
+                }
               }
             }
           }
@@ -399,19 +504,6 @@ private struct WhileYouWereAwayCard: View {
     case .active: return .blue
     case .rejected: return .red
     default: return .gray
-    }
-  }
-  
-  private func timeAgoString(_ date: Date) -> String {
-    let elapsed = Date().timeIntervalSince(date)
-    if elapsed < 60 {
-      return "just now"
-    } else if elapsed < 3600 {
-      return "\(Int(elapsed/60))m ago"
-    } else if elapsed < 86400 {
-      return "\(Int(elapsed/3600))h ago"
-    } else {
-      return "\(Int(elapsed/86400))d ago"
     }
   }
 }
@@ -438,64 +530,57 @@ private struct ActivityStat: View {
   }
 }
 
-// MARK: - Active Tasks Card
+// MARK: - Stats Cards Row
 
-private struct ActiveTasksCard: View {
-  let tasks: [DashboardTask]
-  let onViewAll: () -> Void
+private struct StatsCardsRow: View {
+  let activeTasksCount: Int
+  let completedThisWeek: Int
+  let blockedTasksCount: Int
+  let inboxCount: Int
+  let inboxTasksCount: Int
+  let staleTasksCount: Int
+  let onShowDetails: () -> Void
   
   var body: some View {
-    HomeCardContainer {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack {
-          Image(systemName: "checklist")
-            .font(.title3)
-            .foregroundStyle(.blue)
-          Text("Active Tasks")
-            .font(.headline)
-          
-          Spacer()
-          
-          if !tasks.isEmpty {
-            Text("\(tasks.count)")
-              .font(.title2.bold())
-              .foregroundStyle(.blue)
+    VStack(alignment: .leading, spacing: 12) {
+      HStack {
+        Text("Overview")
+          .font(.headline.bold())
+        Spacer()
+        Button(action: onShowDetails) {
+          HStack(spacing: 4) {
+            Image(systemName: "chart.bar")
+              .font(.caption)
+            Text("Details")
+              .font(.caption)
           }
+          .padding(.horizontal, 8)
+          .padding(.vertical, 4)
+          .background(Color.accentColor.opacity(0.1))
+          .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        
-        if tasks.isEmpty {
-          VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle")
-              .font(.largeTitle)
-              .foregroundStyle(.secondary)
-            Text("No active tasks")
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-          }
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 20)
-        } else {
-          VStack(alignment: .leading, spacing: 8) {
-            ForEach(tasks.prefix(3)) { task in
-              TaskRow(task: task)
-            }
+        .buttonStyle(.plain)
+      }
+      
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 12) {
+          StatCard(label: "Active Tasks", value: "\(activeTasksCount)", icon: "flame.fill", color: .orange)
+          StatCard(label: "Done This Week", value: "\(completedThisWeek)", icon: "checkmark.circle.fill", color: .green)
+          
+          if blockedTasksCount > 0 {
+            StatCard(label: "Blocked", value: "\(blockedTasksCount)", icon: "exclamationmark.octagon.fill", color: .red)
           }
           
-          if tasks.count > 3 {
-            Divider()
-            Button {
-              onViewAll()
-            } label: {
-              HStack {
-                Text("View all \(tasks.count) tasks")
-                  .font(.caption.bold())
-                Spacer()
-                Image(systemName: "arrow.right")
-                  .font(.caption)
-              }
-              .foregroundStyle(.blue)
-            }
-            .buttonStyle(.plain)
+          if inboxTasksCount > 0 {
+            StatCard(label: "Inbox Tasks", value: "\(inboxTasksCount)", icon: "tray.full.fill", color: .blue)
+          }
+          
+          if inboxCount > 0 {
+            StatCard(label: "Inbox Items", value: "\(inboxCount)", icon: "envelope.badge", color: .red)
+          }
+          
+          if staleTasksCount > 0 {
+            StatCard(label: "Stale", value: "\(staleTasksCount)", icon: "exclamationmark.triangle.fill", color: .orange)
           }
         }
       }
@@ -503,136 +588,295 @@ private struct ActiveTasksCard: View {
   }
 }
 
-private struct TaskRow: View {
-  let task: DashboardTask
+private struct StatCard: View {
+  let label: String
+  let value: String
+  let icon: String
+  let color: Color
   
   var body: some View {
-    HStack(spacing: 8) {
-      Circle()
-        .fill(workStateColor(task.workState))
-        .frame(width: 8, height: 8)
-      
-      Text(task.title)
-        .font(.subheadline)
-        .lineLimit(1)
-      
-      Spacer()
-      
-      if let workState = task.workState {
-        Text(workState.rawValue)
-          .font(.caption2)
-          .padding(.horizontal, 6)
-          .padding(.vertical, 2)
-          .background(workStateColor(workState).opacity(0.2))
-          .foregroundStyle(workStateColor(workState))
-          .clipShape(Capsule())
+    VStack(spacing: 8) {
+      HStack(spacing: 6) {
+        Image(systemName: icon)
+          .font(.footnote)
+          .foregroundStyle(color)
+        Text(label)
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
       }
+      Text(value)
+        .font(.title)
+        .fontWeight(.bold)
+        .foregroundStyle(color)
     }
-  }
-  
-  private func workStateColor(_ state: WorkState?) -> Color {
-    switch state {
-    case .inProgress: return .blue
-    case .blocked: return .red
-    case .notStarted: return .gray
-    case .other: return .orange
-    case .none: return .gray
-    }
+    .frame(minWidth: 120)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 14)
+    .background(Color(NSColor.windowBackgroundColor))
+    .clipShape(RoundedRectangle(cornerRadius: 12))
+    .overlay(
+      RoundedRectangle(cornerRadius: 12)
+        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+    )
   }
 }
 
-// MARK: - Inbox Card
+// MARK: - Detailed Stats Section
 
-private struct InboxCard: View {
-  let unreadCount: Int
-  let recentItems: [InboxItem]
-  let onViewAll: () -> Void
+private struct DetailedStatsSection: View {
+  @ObservedObject var vm: AppViewModel
+  
+  private var projectStats: [(project: Project, active: Int, inbox: Int, completed: Int, blocked: Int)] {
+    vm.sortedActiveProjects.map { project in
+      let projectTasks = vm.tasks.filter { $0.projectId == project.id }
+      return (
+        project: project,
+        active: projectTasks.filter { $0.status == .active }.count,
+        inbox: projectTasks.filter { $0.status == .inbox }.count,
+        completed: projectTasks.filter { $0.status == .completed }.count,
+        blocked: projectTasks.filter { $0.workState == .blocked }.count
+      )
+    }
+  }
   
   var body: some View {
-    HomeCardContainer {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack {
-          Image(systemName: "tray.fill")
-            .font(.title3)
-            .foregroundStyle(.orange)
-          Text("Inbox")
-            .font(.headline)
-          
-          Spacer()
-          
-          if unreadCount > 0 {
-            Text("\(unreadCount)")
-              .font(.title2.bold())
-              .foregroundStyle(.orange)
-          }
-        }
-        
-        if recentItems.isEmpty {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Breakdown by Project")
+        .font(.headline.bold())
+      
+      VStack(spacing: 0) {
+        ForEach(projectStats, id: \.project.id) { stat in
           VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle")
-              .font(.largeTitle)
-              .foregroundStyle(.secondary)
-            Text("Inbox empty")
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-          }
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 20)
-        } else {
-          VStack(alignment: .leading, spacing: 8) {
-            ForEach(recentItems.prefix(3)) { item in
-              InboxItemRow(item: item)
-            }
-          }
-          
-          Divider()
-          Button {
-            onViewAll()
-          } label: {
             HStack {
-              Text("View all")
-                .font(.caption.bold())
+              Text(stat.project.title)
+                .font(.subheadline.bold())
               Spacer()
-              Image(systemName: "arrow.right")
-                .font(.caption)
             }
-            .foregroundStyle(.orange)
+            
+            HStack(spacing: 12) {
+              if stat.active > 0 {
+                StatBadge(label: "Active", count: stat.active, color: .orange)
+              }
+              if stat.inbox > 0 {
+                StatBadge(label: "Inbox", count: stat.inbox, color: .blue)
+              }
+              if stat.completed > 0 {
+                StatBadge(label: "Done", count: stat.completed, color: .green)
+              }
+              if stat.blocked > 0 {
+                StatBadge(label: "Blocked", count: stat.blocked, color: .red)
+              }
+              Spacer()
+            }
+          }
+          .padding(12)
+          
+          if stat.project.id != projectStats.last?.project.id {
+            Divider()
+          }
+        }
+      }
+      .background(Color(NSColor.windowBackgroundColor))
+      .clipShape(RoundedRectangle(cornerRadius: 12))
+      .overlay(
+        RoundedRectangle(cornerRadius: 12)
+          .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+      )
+    }
+  }
+}
+
+private struct StatBadge: View {
+  let label: String
+  let count: Int
+  let color: Color
+  
+  var body: some View {
+    HStack(spacing: 4) {
+      Text(label)
+        .font(.caption2)
+      Text("\(count)")
+        .font(.caption2.bold())
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, 4)
+    .background(color.opacity(0.15))
+    .foregroundStyle(color)
+    .clipShape(Capsule())
+  }
+}
+
+// MARK: - Activity Feed Section
+
+private struct ActivityFeedSection: View {
+  let events: [CommandCenterView.ActivityEvent]
+  @ObservedObject var vm: AppViewModel
+  let onShowAll: () -> Void
+  let onOpenTask: (DashboardTask) -> Void
+  let onOpenInbox: (String?) -> Void
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack {
+        Image(systemName: "clock.arrow.circlepath")
+          .foregroundStyle(.indigo)
+        Text("Recent Activity")
+          .font(.headline.bold())
+        Spacer()
+        if !events.isEmpty {
+          Button(action: onShowAll) {
+            Text("View all")
+              .font(.caption.bold())
+              .foregroundStyle(.secondary)
           }
           .buttonStyle(.plain)
         }
       }
+      
+      if events.isEmpty {
+        Text("No activity in the last 7 days")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 20)
+          .background(Color(NSColor.windowBackgroundColor))
+          .clipShape(RoundedRectangle(cornerRadius: 12))
+      } else {
+        VStack(spacing: 0) {
+          ForEach(Array(events.prefix(10).enumerated()), id: \.element.id) { idx, event in
+            ActivityEventRow(
+              vm: vm,
+              event: event,
+              onOpenTask: onOpenTask,
+              onOpenInbox: onOpenInbox
+            )
+            if idx < min(9, events.count - 1) {
+              Divider().padding(.leading, 36)
+            }
+          }
+        }
+        .background(Color(NSColor.windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+          RoundedRectangle(cornerRadius: 12)
+            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+      }
     }
   }
 }
 
-private struct InboxItemRow: View {
-  let item: InboxItem
+private struct ActivityEventRow: View {
+  @ObservedObject var vm: AppViewModel
+  let event: CommandCenterView.ActivityEvent
+  let onOpenTask: (DashboardTask) -> Void
+  let onOpenInbox: (String?) -> Void
+  
+  @State private var isHovering = false
   
   var body: some View {
-    HStack(spacing: 8) {
-      if !item.isRead {
-        Circle()
-          .fill(Color.blue)
-          .frame(width: 8, height: 8)
-      } else {
-        Circle()
-          .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-          .frame(width: 8, height: 8)
+    Button {
+      switch event {
+      case .taskCompleted(let t):
+        onOpenTask(t)
+      case .inboxItem(let item):
+        onOpenInbox(item.id)
+      case .workerRun:
+        break
       }
-      
-      Text(item.title)
-        .font(.subheadline)
-        .lineLimit(1)
-      
-      Spacer()
-      
-      Text(timeAgoString(item.modifiedAt))
-        .font(.caption2)
-        .foregroundStyle(.tertiary)
+    } label: {
+      HStack(spacing: 10) {
+        icon
+          .font(.footnote)
+          .frame(width: 24)
+        
+        VStack(alignment: .leading, spacing: 2) {
+          Text(title)
+            .font(.footnote)
+            .fontWeight(.medium)
+            .lineLimit(1)
+          
+          Text(subtitle)
+            .font(.system(size: 11))
+            .foregroundStyle(.tertiary)
+            .lineLimit(1)
+        }
+        
+        Spacer()
+        
+        Text(relativeTime(event.date))
+          .font(.system(size: 11))
+          .foregroundStyle(.tertiary)
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(isHovering ? Color.primary.opacity(0.05) : Color.clear)
+    }
+    .buttonStyle(.plain)
+    .disabled(!isClickable)
+    .onHover { h in isHovering = h }
+  }
+  
+  private var isClickable: Bool {
+    switch event {
+    case .workerRun:
+      return false
+    default:
+      return true
     }
   }
   
-  private func timeAgoString(_ date: Date) -> String {
+  private var title: String {
+    switch event {
+    case .taskCompleted(let t):
+      return "Completed: \(t.title)"
+    case .inboxItem(let item):
+      return "Inbox: \(item.title)"
+    case .workerRun:
+      return "Worker ran"
+    }
+  }
+  
+  private var subtitle: String {
+    switch event {
+    case .taskCompleted(let t):
+      let projectId = t.projectId ?? "default"
+      let projectName = vm.projects.first(where: { $0.id == projectId })?.title ?? projectId
+      return "\(projectName) · \(t.owner.rawValue)"
+    case .inboxItem(let item):
+      return item.summary
+    case .workerRun(let run):
+      let tasks = run.tasksCompleted ?? 0
+      let dur = formatDuration(start: run.startedAt, end: run.endedAt)
+      return "\(tasks) task(s) · \(dur)"
+    }
+  }
+  
+  @ViewBuilder
+  private var icon: some View {
+    switch event {
+    case .taskCompleted:
+      Image(systemName: "checkmark.circle.fill")
+        .foregroundStyle(.green)
+    case .inboxItem:
+      Image(systemName: "tray.circle.fill")
+        .foregroundStyle(.blue)
+    case .workerRun:
+      Image(systemName: "gearshape.2.fill")
+        .foregroundStyle(.purple)
+    }
+  }
+  
+  private func formatDuration(start: Date?, end: Date?) -> String {
+    guard let start, let end else { return "" }
+    let s = max(0, end.timeIntervalSince(start))
+    if s < 60 { return "\(Int(s))s" }
+    if s < 3600 { return "\(Int(s/60))m" }
+    return String(format: "%.1fh", s/3600)
+  }
+  
+  private func relativeTime(_ date: Date) -> String {
     let elapsed = Date().timeIntervalSince(date)
     if elapsed < 60 {
       return "just now"
@@ -643,6 +887,190 @@ private struct InboxItemRow: View {
     } else {
       return "\(Int(elapsed/86400))d ago"
     }
+  }
+}
+
+// MARK: - Projects Cards Section
+
+private struct ProjectCardsSection: View {
+  let projects: [Project]
+  let tasks: [DashboardTask]
+  let onSelectProject: (String) -> Void
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Projects")
+        .font(.headline.bold())
+      
+      if projects.isEmpty {
+        Text("No active projects")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 20)
+          .background(Color(NSColor.windowBackgroundColor))
+          .clipShape(RoundedRectangle(cornerRadius: 12))
+      } else {
+        LazyVGrid(columns: [
+          GridItem(.flexible()),
+          GridItem(.flexible())
+        ], spacing: 16) {
+          ForEach(projects) { project in
+            ProjectCard(
+              project: project,
+              tasks: tasks.filter { $0.projectId == project.id },
+              onTap: { onSelectProject(project.id) }
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+private struct ProjectCard: View {
+  let project: Project
+  let tasks: [DashboardTask]
+  let onTap: () -> Void
+  
+  @State private var isHovering = false
+  
+  private var activeCount: Int { tasks.filter { $0.status == .active }.count }
+  private var completedCount: Int { tasks.filter { $0.status == .completed }.count }
+  private var inboxCount: Int { tasks.filter { $0.status == .inbox }.count }
+  private var blockedCount: Int { tasks.filter { $0.workState == .blocked }.count }
+  private var totalCount: Int { tasks.count }
+  
+  private var lastActivity: Date? {
+    tasks.map(\.updatedAt).max()
+  }
+  
+  var body: some View {
+    Button(action: onTap) {
+      VStack(alignment: .leading, spacing: 12) {
+        // Title row
+        HStack(spacing: 8) {
+          Image(systemName: projectIcon(project.type))
+            .font(.body)
+            .foregroundStyle(projectColor(project.type))
+          
+          Text(project.title)
+            .font(.callout.bold())
+            .lineLimit(1)
+          
+          Spacer()
+          
+          Text(project.type?.rawValue.capitalized ?? "Default")
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(projectColor(project.type).opacity(0.15))
+            .foregroundStyle(projectColor(project.type))
+            .clipShape(Capsule())
+        }
+        
+        // Counts
+        HStack(spacing: 12) {
+          if activeCount > 0 {
+            CountBadge(label: "Active", count: activeCount, color: .orange)
+          }
+          if inboxCount > 0 {
+            CountBadge(label: "Inbox", count: inboxCount, color: .blue)
+          }
+          if completedCount > 0 {
+            CountBadge(label: "Done", count: completedCount, color: .green)
+          }
+          if blockedCount > 0 {
+            CountBadge(label: "Blocked", count: blockedCount, color: .red)
+          }
+          Spacer()
+          if totalCount > 0 {
+            Text("\(totalCount) total")
+              .font(.footnote)
+              .foregroundStyle(.tertiary)
+          }
+        }
+        
+        // Last activity
+        if let last = lastActivity {
+          HStack(spacing: 4) {
+            Image(systemName: "clock")
+              .font(.system(size: 11))
+              .foregroundStyle(.tertiary)
+            Text("Last activity: \(relativeTime(last))")
+              .font(.footnote)
+              .foregroundStyle(.tertiary)
+          }
+        }
+      }
+      .padding(16)
+      .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
+      .contentShape(Rectangle())
+      .background(
+        RoundedRectangle(cornerRadius: 12)
+          .fill(Color(NSColor.windowBackgroundColor))
+          .shadow(color: .black.opacity(isHovering ? 0.08 : 0.03), radius: isHovering ? 8 : 4, y: 2)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 12)
+          .stroke(isHovering ? Color.accentColor.opacity(0.3) : Color.primary.opacity(0.1), lineWidth: isHovering ? 1.5 : 1)
+      )
+      .scaleEffect(isHovering ? 1.01 : 1.0)
+      .animation(.easeOut(duration: 0.15), value: isHovering)
+    }
+    .buttonStyle(.plain)
+    .onHover { h in isHovering = h }
+  }
+  
+  private func projectIcon(_ type: ProjectType?) -> String {
+    switch type {
+    case .kanban: return "rectangle.3.group.fill"
+    case .research: return "magnifyingglass"
+    case .tracker: return "checklist"
+    case .none: return "folder.fill"
+    }
+  }
+  
+  private func projectColor(_ type: ProjectType?) -> Color {
+    switch type {
+    case .kanban: return .blue
+    case .research: return .purple
+    case .tracker: return .green
+    case .none: return .gray
+    }
+  }
+  
+  private func relativeTime(_ date: Date) -> String {
+    let elapsed = Date().timeIntervalSince(date)
+    if elapsed < 60 {
+      return "just now"
+    } else if elapsed < 3600 {
+      return "\(Int(elapsed/60))m ago"
+    } else if elapsed < 86400 {
+      return "\(Int(elapsed/3600))h ago"
+    } else {
+      return "\(Int(elapsed/86400))d ago"
+    }
+  }
+}
+
+private struct CountBadge: View {
+  let label: String
+  let count: Int
+  let color: Color
+  
+  var body: some View {
+    HStack(spacing: 4) {
+      Text(label)
+        .font(.caption2)
+      Text("\(count)")
+        .font(.caption2.bold())
+    }
+    .padding(.horizontal, 6)
+    .padding(.vertical, 3)
+    .background(color.opacity(0.15))
+    .foregroundStyle(color)
+    .clipShape(Capsule())
   }
 }
 
@@ -1092,159 +1520,6 @@ private struct QuickActionButton: View {
   }
 }
 
-// MARK: - AI Usage Card
-
-private struct AIUsageCard: View {
-  let workerHistory: WorkerHistory?
-  let mainSessionUsage: MainSessionUsage?
-  let onViewDetails: () -> Void
-  
-  private var totalCost: Double {
-    let workerCost = workerHistory?.runs.reduce(into: 0.0) { sum, run in
-      sum += run.totalCostUSD ?? 0
-    } ?? 0
-    let mainCost = mainSessionUsage?.dailySummaries.values.reduce(into: 0.0) { sum, daily in
-      sum += daily.costUSD
-    } ?? 0
-    return workerCost + mainCost
-  }
-  
-  private var totalTokens: Int {
-    let workerTokens = workerHistory?.runs.reduce(into: 0) { sum, run in
-      sum += (run.inputTokens ?? 0) + (run.outputTokens ?? 0)
-    } ?? 0
-    let mainTokens = mainSessionUsage?.dailySummaries.values.reduce(into: 0) { sum, daily in
-      sum += daily.inputTokens + daily.outputTokens
-    } ?? 0
-    return workerTokens + mainTokens
-  }
-  
-  private var recentRuns: Int {
-    workerHistory?.runs.filter { run in
-      guard let ended = run.endedAt else { return false }
-      return ended > Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date.distantPast
-    }.count ?? 0
-  }
-  
-  var body: some View {
-    HomeCardContainer {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack {
-          Image(systemName: "chart.line.uptrend.xyaxis")
-            .font(.title3)
-            .foregroundStyle(.cyan)
-          Text("AI Usage")
-            .font(.headline)
-          
-          Spacer()
-          
-          Text("$\(totalCost, specifier: "%.2f")")
-            .font(.title2.bold())
-            .foregroundStyle(.cyan)
-        }
-        
-        VStack(alignment: .leading, spacing: 8) {
-          HStack {
-            Text("Total Tokens")
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(totalTokens / 1000)K")
-              .font(.caption.bold())
-          }
-          
-          HStack {
-            Text("Worker Runs (7d)")
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(recentRuns)")
-              .font(.caption.bold())
-          }
-        }
-        
-        Divider()
-        Button {
-          onViewDetails()
-        } label: {
-          HStack {
-            Text("View details")
-              .font(.caption.bold())
-            Spacer()
-            Image(systemName: "arrow.right")
-              .font(.caption)
-          }
-          .foregroundStyle(.cyan)
-        }
-        .buttonStyle(.plain)
-      }
-    }
-  }
-}
-
-// MARK: - Analytics Card
-
-private struct AnalyticsCard: View {
-  let tasksCount: Int
-  let completionRate: Double
-  let onViewDetails: () -> Void
-  
-  var body: some View {
-    HomeCardContainer {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack {
-          Image(systemName: "chart.bar.xaxis")
-            .font(.title3)
-            .foregroundStyle(.purple)
-          Text("Analytics")
-            .font(.headline)
-          
-          Spacer()
-          
-          Text("\(Int(completionRate * 100))%")
-            .font(.title2.bold())
-            .foregroundStyle(.purple)
-        }
-        
-        VStack(alignment: .leading, spacing: 8) {
-          HStack {
-            Text("Total Tasks")
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(tasksCount)")
-              .font(.caption.bold())
-          }
-          
-          HStack {
-            Text("Completion Rate")
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(Int(completionRate * 100))%")
-              .font(.caption.bold())
-          }
-        }
-        
-        Divider()
-        Button {
-          onViewDetails()
-        } label: {
-          HStack {
-            Text("Detailed statistics")
-              .font(.caption.bold())
-            Spacer()
-            Image(systemName: "arrow.right")
-              .font(.caption)
-          }
-          .foregroundStyle(.purple)
-        }
-        .buttonStyle(.plain)
-      }
-    }
-  }
-}
-
 // MARK: - Card Container
 
 private struct HomeCardContainer<Content: View>: View {
@@ -1265,6 +1540,150 @@ private struct HomeCardContainer<Content: View>: View {
           .stroke(Color.primary.opacity(0.08), lineWidth: 1)
       )
       .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+  }
+}
+
+// MARK: - Activity Sheet View
+
+private struct ActivitySheetView: View {
+  @ObservedObject var vm: AppViewModel
+  let events: [CommandCenterView.ActivityEvent]
+  let onOpenTask: (DashboardTask) -> Void
+  let onOpenInbox: (String?) -> Void
+  
+  @Environment(\.dismiss) private var dismiss
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack {
+        Text("Recent Activity")
+          .font(.title3.bold())
+        Spacer()
+        Button { dismiss() } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title3)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding(16)
+      
+      Divider()
+      
+      ScrollView {
+        LazyVStack(spacing: 0) {
+          if events.isEmpty {
+            Text("No activity")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+              .padding(20)
+              .frame(maxWidth: .infinity, alignment: .center)
+          } else {
+            ForEach(Array(events.enumerated()), id: \.element.id) { idx, event in
+              ActivityEventRow(
+                vm: vm,
+                event: event,
+                onOpenTask: { t in
+                  onOpenTask(t)
+                  dismiss()
+                },
+                onOpenInbox: { itemId in
+                  onOpenInbox(itemId)
+                  dismiss()
+                }
+              )
+              if idx < events.count - 1 {
+                Divider().padding(.leading, 36)
+              }
+            }
+          }
+        }
+        .padding(16)
+      }
+    }
+    .background(Color(NSColor.controlBackgroundColor))
+  }
+}
+
+// MARK: - Task Detail Sheet
+
+private struct TaskDetailSheet: View {
+  let task: DashboardTask
+  @ObservedObject var vm: AppViewModel
+  
+  @Environment(\.dismiss) private var dismiss
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack {
+        Text(task.title)
+          .font(.title3.bold())
+        Spacer()
+        Button { dismiss() } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title3)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding(16)
+      
+      Divider()
+      
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          if let projectId = task.projectId {
+            if let project = vm.projects.first(where: { $0.id == projectId }) {
+              HStack {
+                Text("Project:")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                Text(project.title)
+                  .font(.subheadline.bold())
+              }
+            }
+          }
+          
+          HStack {
+            Text("Status:")
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+            Text(task.status.rawValue.capitalized)
+              .font(.subheadline.bold())
+          }
+          
+          if let workState = task.workState {
+            HStack {
+              Text("Work State:")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+              Text(workState.rawValue)
+                .font(.subheadline.bold())
+            }
+          }
+          
+          HStack {
+            Text("Owner:")
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+            Text(task.owner.rawValue)
+              .font(.subheadline.bold())
+          }
+          
+          if let notes = task.notes, !notes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+              Text("Notes:")
+                .font(.subheadline.bold())
+              Text(notes)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
+        .padding(16)
+      }
+    }
+    .background(Color(NSColor.controlBackgroundColor))
   }
 }
 
