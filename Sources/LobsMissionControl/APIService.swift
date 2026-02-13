@@ -581,36 +581,86 @@ final class APIService {
   }
   
   func saveInboxThread(_ thread: InboxThread) async throws -> InboxThread {
-    // Save each message
-    for message in thread.messages {
-      struct MessageCreate: Codable {
-        let id: String
-        let threadId: String
-        let author: String
-        let text: String
-        
-        enum CodingKeys: String, CodingKey {
-          case id
-          case threadId = "thread_id"
-          case author
-          case text
-        }
+    // Only save the last message (the newly added one)
+    guard let message = thread.messages.last else { return thread }
+    return try await saveInboxThreadMessage(docId: thread.docId, threadId: thread.id, message: message)
+  }
+  
+  func saveInboxThreadMessage(docId: String, threadId: String, message: InboxThreadMessage) async throws -> InboxThread {
+    struct MessageCreate: Codable {
+      let id: String
+      let threadId: String
+      let author: String
+      let text: String
+      
+      enum CodingKeys: String, CodingKey {
+        case id
+        case threadId = "thread_id"
+        case author
+        case text
       }
-      
-      let create = MessageCreate(
-        id: message.id,
-        threadId: thread.id,
-        author: message.author,
-        text: message.text
-      )
-      
-      let _: InboxThreadMessage = try await request(
-        method: "POST",
-        path: "/api/inbox/\(thread.docId)/thread/messages",
-        body: create
+    }
+    
+    let create = MessageCreate(
+      id: message.id,
+      threadId: threadId,
+      author: message.author,
+      text: message.text
+    )
+    
+    let _: InboxThreadMessage = try await request(
+      method: "POST",
+      path: "/api/inbox/\(docId)/thread/messages",
+      body: create
+    )
+    
+    // Reload the full thread from server to stay in sync
+    return try await loadInboxThread(docId: docId)
+  }
+  
+  func loadInboxThread(docId: String) async throws -> InboxThread {
+    struct ServerThread: Codable {
+      let id: String
+      let docId: String
+      let triageStatus: String?
+      let createdAt: Date
+      let updatedAt: Date
+    }
+    
+    struct ThreadResponse: Codable {
+      let thread: ServerThread?
+      let messages: [InboxThreadMessage]
+    }
+    
+    let response: ThreadResponse = try await request(
+      method: "GET",
+      path: "/api/inbox/\(docId)/thread"
+    )
+    
+    if let t = response.thread {
+      let triage: InboxTriageStatus
+      switch t.triageStatus {
+      case "resolved": triage = .resolved
+      case "pending": triage = .pending
+      default: triage = .needsResponse
+      }
+      return InboxThread(
+        id: t.id,
+        docId: t.docId,
+        messages: response.messages,
+        triageStatus: triage,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt
       )
     }
-    return thread
+    
+    return InboxThread(
+      id: UUID().uuidString,
+      docId: docId,
+      messages: [],
+      createdAt: Date(),
+      updatedAt: Date()
+    )
   }
   
   func loadAllInboxThreads() async throws -> [String: InboxThread] {

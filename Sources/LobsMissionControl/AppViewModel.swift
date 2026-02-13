@@ -2155,10 +2155,11 @@ final class AppViewModel: ObservableObject {
         await MainActor.run {
           self.inboxThreadsByDocId[docId] = updatedThread
           self.pendingThreadWrites.removeValue(forKey: docId)
+          self.flashSuccess("Response sent")
         }
       } catch {
         await MainActor.run {
-          self.flashError("Failed to save thread: \(error.localizedDescription)")
+          self.flashError("Failed to save response: \(error.localizedDescription)")
         }
       }
     }
