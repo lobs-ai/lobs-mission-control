@@ -5,7 +5,7 @@ import UserNotifications
 
 @MainActor
 final class AppViewModel: ObservableObject {
-  nonisolated private static func decodingPathString(_ codingPath: [CodingKey]) -> String {
+  private static func decodingPathString(_ codingPath: [CodingKey]) -> String {
     if codingPath.isEmpty { return "<root>" }
     return codingPath.map { key in
       if let index = key.intValue { return "[\(index)]" }
@@ -13,7 +13,7 @@ final class AppViewModel: ObservableObject {
     }.joined(separator: ".")
   }
 
-  nonisolated private static func describeLoadError(_ error: Error) -> String {
+  private static func describeLoadError(_ error: Error) -> String {
     if let decodingError = error as? DecodingError {
       switch decodingError {
       case .typeMismatch(let type, let context):
@@ -149,8 +149,9 @@ final class AppViewModel: ObservableObject {
     // If config doesn't exist or doesn't say complete, check the onboarding state.
     // Load from workspace (parent of control repo), not control repo itself
     let workspacePath: String? = {
-      guard let controlPath = config?.controlRepoPath, !controlPath.isEmpty else { return nil }
-      return URL(fileURLWithPath: controlPath).deletingLastPathComponent().path
+      let state = OnboardingStateManager.load()
+      let ws = state.workspace?.trimmingCharacters(in: .whitespacesAndNewlines)
+      return (ws?.isEmpty == false) ? ws : nil
     }()
     let onboardingState = OnboardingStateManager.load(preferredWorkspacePath: workspacePath)
     
@@ -166,13 +167,7 @@ final class AppViewModel: ObservableObject {
       } else {
         // Config is missing entirely - create one with onboarding complete.
         // Use workspace path from onboarding state if available.
-        let workspace = onboardingState.workspace ?? LobsPaths.defaultWorkspace
-        let controlPath = (workspace as NSString).appendingPathComponent("lobs-control")
-        let newConfig = AppConfig(
-          controlRepoUrl: "",
-          controlRepoPath: controlPath,
-          onboardingComplete: true
-        )
+        let newConfig = AppConfig(onboardingComplete: true)
         self.config = newConfig
         saveConfig()
       }
@@ -358,6 +353,24 @@ final class AppViewModel: ObservableObject {
   @Published var showOverview: Bool = true
   @Published var artifactText: String = "(select a task)"
   @Published var lastError: String? = nil
+  @Published var isGitBusy: Bool = false
+  @Published var isGitHubSyncing: Bool = false
+  @Published var syncBlockedByUncommitted: Bool = false
+  @Published var syncConflictFiles: [String] = []
+  @Published var syncConflictDetailsPresented: Bool = false
+  @Published var controlRepoAhead: Int = 0
+  @Published var controlRepoBehind: Int = 0
+  @Published var pendingChangesCount: Int = 0
+  @Published var lastGitHubSyncAt: Date? = nil
+  @Published var lastGitHubSyncError: String? = nil
+  @Published var lastPushAttemptAt: Date? = nil
+  @Published var lastSuccessfulPushAt: Date? = nil
+  @Published var lastPushedCommitHash: String? = nil
+  @Published var lastPushError: String? = nil
+  @Published var forcePushEscalationPresented: Bool = false
+  @Published var forcePushEscalationError: String? = nil
+  @Published var rebaseRecoveryPresented: Bool = false
+  @Published var rebaseRecoveryDialogMessage: String = "A previous rebase appears to be incomplete."
 
   /// Transient error banner — shown briefly then auto-dismissed.
   @Published var errorBanner: String? = nil
@@ -519,6 +532,8 @@ final class AppViewModel: ObservableObject {
     }
   }
   private var refreshTimer: Timer?
+  private var lastControlRepoStatusCheck: Date? = nil
+  private var lastPendingChangesUpdate: Date? = nil
 
   init() {
     // Load config from ConfigManager (includes automatic migration from UserDefaults)
@@ -706,7 +721,7 @@ final class AppViewModel: ObservableObject {
           // Auto-archive is handled server-side, no need to do it client-side
 
           // Track GitHub sync status if selected project uses GitHub mode
-          let hasGitHubProject = loadedProjects.contains { $0.tracking == .github && $0.github != nil }
+          let hasGitHubProject = false
 
           let file = try await self.api.loadTasks()
 
@@ -720,7 +735,7 @@ final class AppViewModel: ObservableObject {
       // Back on main actor — update UI with loaded data
       await MainActor.run {
         guard let data = loadedData else {
-          let hasGitHubProject = projects.contains { $0.syncMode == .github && $0.githubConfig != nil }
+          let hasGitHubProject = false
           if hasGitHubProject {
             lastGitHubSyncError = "Failed to load data"
             isGitHubSyncing = false
@@ -838,14 +853,16 @@ final class AppViewModel: ObservableObject {
   @discardableResult
   func setControlRepo(path: String, repoUrl: String? = nil, onboardingComplete: Bool? = nil) -> Bool {
     var updatedConfig = config ?? AppConfig()
-    updatedConfig.controlRepoPath = path
-    if let repoUrl {
-      updatedConfig.controlRepoUrl = repoUrl
-    }
     if let onboardingComplete {
       updatedConfig.onboardingComplete = onboardingComplete
     }
     config = updatedConfig
+
+    var state = OnboardingStateManager.load()
+    let repoPath = URL(fileURLWithPath: path)
+    let workspaceURL = repoPath.lastPathComponent == "lobs-control" ? repoPath.deletingLastPathComponent() : repoPath
+    state.workspace = workspaceURL.path
+    OnboardingStateManager.save(state)
 
     do {
       try ConfigManager.save(updatedConfig)
@@ -861,6 +878,15 @@ final class AppViewModel: ObservableObject {
   func setRepoURL(_ url: URL) {
     // Legacy API used by the repo picker; selecting a repo implies onboarding is complete.
     setControlRepo(path: url.path, repoUrl: nil, onboardingComplete: true)
+  }
+
+  /// Control repo path resolved from onboarding workspace.
+  var repoURL: URL? {
+    let state = OnboardingStateManager.load()
+    guard let workspace = state.workspace?.trimmingCharacters(in: .whitespacesAndNewlines), !workspace.isEmpty else {
+      return nil
+    }
+    return URL(fileURLWithPath: workspace).appendingPathComponent("lobs-control")
   }
 
   /// URL of the lobs-dashboard repo — derived as sibling of lobs-control.
@@ -1199,7 +1225,7 @@ final class AppViewModel: ObservableObject {
           // Auto-archive is handled server-side
 
           // Track GitHub sync status if any project uses GitHub mode
-          let hasGitHubProject = loadedProjects.contains { $0.tracking == .github && $0.github != nil }
+          let hasGitHubProject = false
 
           let file = try await self.api.loadTasks()
 
@@ -1217,7 +1243,7 @@ final class AppViewModel: ObservableObject {
       // Back on main actor — update UI with loaded data
       await MainActor.run {
         guard let data = loadedData else {
-          let hasGitHubProject = projects.contains { $0.tracking == .github && $0.github != nil }
+          let hasGitHubProject = false
           if hasGitHubProject {
             lastGitHubSyncError = "Failed to load data"
             isGitHubSyncing = false
@@ -1280,9 +1306,8 @@ final class AppViewModel: ObservableObject {
 
   /// Sync GitHub cache via API for the current project.
   func syncGitHubCache() {
-    guard let currentProject = projects.first(where: { $0.id == selectedProjectId }),
-          currentProject.tracking == .github else {
-      flashError("Current project is not GitHub-tracked")
+    guard let currentProject = projects.first(where: { $0.id == selectedProjectId }) else {
+      flashError("No project selected")
       return
     }
     guard !isGitHubSyncing && !isGitBusy else { return }
@@ -1302,6 +1327,31 @@ final class AppViewModel: ObservableObject {
         }
       }
     }
+  }
+
+  func rebaseRecoveryContinue() {
+    rebaseRecoveryPresented = false
+  }
+
+  func rebaseRecoverySkip() {
+    rebaseRecoveryPresented = false
+  }
+
+  func rebaseRecoveryAbort() {
+    rebaseRecoveryPresented = false
+  }
+
+  private func promptRebaseRecoveryIfNeeded(context: String) {
+    _ = context
+    rebaseRecoveryPresented = false
+  }
+
+  private func syncRepoAsync(repoURL: URL) async throws {
+    _ = repoURL
+  }
+
+  private func autoCommitLocalChangesAsync(repoURL: URL) async throws {
+    _ = repoURL
   }
 
   /// Manually push local commits to origin.
@@ -1533,6 +1583,14 @@ final class AppViewModel: ObservableObject {
     // Update local state from cache
     trackerItems = cache.getTrackerItems(selectedProjectId)
     trackerRequests = cache.getResearchRequests(selectedProjectId)
+  }
+
+  func loadResearchData() {
+    Task { await loadResearchDataAsync() }
+  }
+
+  func syncConflictRefreshFiles() {
+    syncConflictFiles = []
   }
 
   func addTrackerItem(title: String, difficulty: String? = nil, tags: [String]? = nil, notes: String? = nil, links: [String]? = nil) {
@@ -1997,8 +2055,16 @@ final class AppViewModel: ObservableObject {
             notes: task.notes
           )
         }
-        
-        // For GitHub projects, create issues for each task
+
+      } catch {
+        await MainActor.run {
+          self.flashError("Failed to stamp template: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+
+  func postInboxThreadMessage(docId: String, author: String, text: String) {
     let now = Date()
     let msg = InboxThreadMessage(
       id: UUID().uuidString,

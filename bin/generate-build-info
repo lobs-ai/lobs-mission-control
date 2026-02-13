@@ -5,7 +5,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-OUTPUT="$REPO_DIR/Sources/LobsDashboard/BuildInfo.generated.swift"
+
+if [ -d "$REPO_DIR/Sources/LobsMissionControl" ]; then
+  OUTPUT="$REPO_DIR/Sources/LobsMissionControl/BuildInfo.generated.swift"
+elif [ -d "$REPO_DIR/Sources/LobsDashboard" ]; then
+  OUTPUT="$REPO_DIR/Sources/LobsDashboard/BuildInfo.generated.swift"
+else
+  echo "[build-info] Unable to find supported source directory under $REPO_DIR/Sources" >&2
+  exit 1
+fi
 
 COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
 TMP_OUTPUT="$(mktemp)"
@@ -24,6 +32,7 @@ EOF
 if [ -f "$OUTPUT" ] && cmp -s "$TMP_OUTPUT" "$OUTPUT"; then
   rm -f "$TMP_OUTPUT"
 else
+  mkdir -p "$(dirname "$OUTPUT")"
   mv "$TMP_OUTPUT" "$OUTPUT"
 fi
 

@@ -41,7 +41,7 @@ struct CommandCenterView: View {
     // Check worker history for recent errors
     if let history = vm.workerHistory {
       errors = history.runs.filter { run in
-        run.status == "failed" && (run.endedAt ?? run.startedAt ?? Date.distantPast) > lastVisit
+        (run.succeeded == false) && (run.endedAt ?? run.startedAt ?? Date.distantPast) > lastVisit
       }.count
     }
     
@@ -65,7 +65,7 @@ struct CommandCenterView: View {
   private var systemHealth: (server: String, orchestrator: String, workers: Int) {
     let serverStatus = vm.config != nil ? "healthy" : "down"
     let orchestratorStatus = vm.workerStatus != nil ? "running" : "unknown"
-    let activeWorkers = vm.workerStatus?.activeWorkers.count ?? 0
+    let activeWorkers = (vm.workerStatus?.active == true) ? 1 : 0
     return (serverStatus, orchestratorStatus, activeWorkers)
   }
   
@@ -430,8 +430,8 @@ private struct TaskRow: View {
     switch state {
     case .inProgress: return .blue
     case .blocked: return .red
-    case .review: return .orange
     case .notStarted: return .gray
+    case .other: return .orange
     case .none: return .gray
     }
   }

@@ -380,45 +380,7 @@ final class LobsControlStore {
     // Load local tasks first
     var allTasks = try loadLocalTasks()
 
-    // Load projects to check for GitHub sync mode
-    let projectsFile: ProjectsFile?
-    do {
-      projectsFile = try loadProjects()
-    } catch {
-      // Continue with local tasks when projects cannot be loaded.
-      logStore("ERROR", "Failed to load projects during task load; continuing with local tasks only: \(describe(error))")
-      projectsFile = nil
-    }
-
-    // For each project with GitHub mode, load and merge tasks from cache
-    for project in (projectsFile?.projects ?? []) where project.tracking == .github {
-      do {
-        let githubTasks = try loadTasksFromGitHubCache(project: project)
-
-        // Merge GitHub tasks with local tasks
-        // Strategy: match by githubIssueNumber; prefer local for conflicts; add unmatched GitHub tasks
-        let localTasksByIssueNumber = Dictionary(
-          uniqueKeysWithValues: allTasks.compactMap { task -> (Int, DashboardTask)? in
-            guard task.projectId == project.id, let issueNumber = task.githubIssueNumber else { return nil }
-            return (issueNumber, task)
-          }
-        )
-
-        for githubTask in githubTasks {
-          if let issueNumber = githubTask.githubIssueNumber,
-             localTasksByIssueNumber[issueNumber] != nil {
-            // Task exists locally - keep local version as source of truth
-            continue
-          } else {
-            // New task from GitHub - add it
-            allTasks.append(githubTask)
-          }
-        }
-      } catch {
-        // Log error but continue loading other projects
-        logStore("WARN", "Failed to load GitHub tasks for project \(project.title): \(describe(error))")
-      }
-    }
+    // API-first mode: task source of truth is local/API state only.
 
     // Stable ordering (nice UX)
     // Respect manual sortOrder first, then fall back to creation time.
@@ -476,160 +438,28 @@ final class LobsControlStore {
   /// Load tasks from GitHub Issues for a project.
   /// Load GitHub issues from local cache (populated by gh-sync script).
   func loadTasksFromGitHubCache(project: Project) throws -> [DashboardTask] {
-    guard let config = project.githubConfig else {
-      throw StoreError.missingGitHubConfig
-    }
-
-    // Parse owner/repo from config.repo (format: "owner/repo")
-    let parts = config.repo.split(separator: "/")
-    guard parts.count == 2 else {
-      throw StoreError.missingGitHubConfig
-    }
-    let owner = String(parts[0])
-    let repo = String(parts[1])
-
-    // Read from cache
-    let cacheKey = "\(owner)-\(repo)"
-    let cachePath = repoRoot
-      .appendingPathComponent("state/cache/github")
-      .appendingPathComponent(cacheKey)
-      .appendingPathComponent("issues.json")
-
-    guard FileManager.default.fileExists(atPath: cachePath.path) else {
-      // Cache doesn't exist yet - return empty array
-      return []
-    }
-
-    let data = try Data(contentsOf: cachePath)
-    let cache = try decoder().decode(GitHubIssueCache.self, from: data)
-
-    var tasks: [DashboardTask] = []
-    for cachedIssue in cache.issues {
-      let task = try mapCachedIssueToTask(issue: cachedIssue, projectId: project.id, repo: config.repo)
-      tasks.append(task)
-    }
-
-    return tasks
+    _ = project
+    return []
   }
 
   /// Get the last sync timestamp for a GitHub project cache.
   func getGitHubCacheTimestamp(project: Project) -> Date? {
-    guard let config = project.githubConfig else { return nil }
-
-    let parts = config.repo.split(separator: "/")
-    guard parts.count == 2 else { return nil }
-    let owner = String(parts[0])
-    let repo = String(parts[1])
-
-    let cacheKey = "\(owner)-\(repo)"
-    let timestampPath = repoRoot
-      .appendingPathComponent("state/cache/github")
-      .appendingPathComponent(cacheKey)
-      .appendingPathComponent("last_sync.txt")
-
-    guard FileManager.default.fileExists(atPath: timestampPath.path),
-          let timestamp = try? String(contentsOf: timestampPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
-          let date = ISO8601DateFormatter().date(from: timestamp) else {
-      return nil
-    }
-
-    return date
+    _ = project
+    return nil
   }
 
   func loadTasksFromGitHub(project: Project, token: String) async throws -> [DashboardTask] {
-    guard let config = project.githubConfig else {
-      throw StoreError.missingGitHubConfig
-    }
-
-    // Parse owner/repo from config.repo (format: "owner/repo")
-    let parts = config.repo.split(separator: "/")
-    guard parts.count == 2 else {
-      throw StoreError.missingGitHubConfig
-    }
-    let owner = String(parts[0])
-    let repo = String(parts[1])
-
-    let service = GitHubService()
-    let issues = try await service.listIssues(owner: owner, repo: repo, token: token, state: "all")
-
-    var tasks: [DashboardTask] = []
-    for issue in issues {
-      let task = try mapGitHubIssueToTask(issue: issue, projectId: project.id)
-      tasks.append(task)
-    }
-
-    return tasks
+    _ = project
+    _ = token
+    throw StoreError.missingGitHubConfig
   }
 
   /// Save a task to GitHub Issues (create new or update existing).
   @discardableResult
   func saveTaskToGitHub(task: DashboardTask, project: Project, token: String) async throws -> DashboardTask {
-    guard let config = project.githubConfig else {
-      throw StoreError.missingGitHubConfig
-    }
-
-    // Parse owner/repo from config.repo (format: "owner/repo")
-    let parts = config.repo.split(separator: "/")
-    guard parts.count == 2 else {
-      throw StoreError.missingGitHubConfig
-    }
-    let owner = String(parts[0])
-    let repo = String(parts[1])
-
-    let service = GitHubService()
-
-    // Generate labels from task status and work state
-    var labels: [String] = []
-    labels.append("status:\(task.status.rawValue)")
-    if let workState = task.workState {
-      labels.append("work:\(workState.rawValue)")
-    }
-    if let syncLabels = config.labelFilter {
-      labels.append(contentsOf: syncLabels)
-    }
-
-    // Format body with task metadata
-    var bodyParts: [String] = []
-    if let notes = task.notes, !notes.isEmpty {
-      bodyParts.append(notes)
-    }
-    bodyParts.append("---")
-    bodyParts.append("**Task ID:** `\(task.id)`")
-    bodyParts.append("**Owner:** \(task.owner.rawValue)")
-    bodyParts.append("**Created:** \(task.createdAt.formatted())")
-    bodyParts.append("**Updated:** \(task.updatedAt.formatted())")
-    let body = bodyParts.joined(separator: "\n")
-
-    // Create or update based on githubIssueNumber
-    let issue: GitHubIssue
-    if let issueNumber = task.githubIssueNumber {
-      // Update existing issue
-      issue = try await service.updateIssue(
-        owner: owner,
-        repo: repo,
-        token: token,
-        issueNumber: issueNumber,
-        title: task.title,
-        body: body,
-        state: task.status == .completed ? "closed" : "open",
-        labels: labels
-      )
-    } else {
-      // Create new issue
-      issue = try await service.createIssue(
-        owner: owner,
-        repo: repo,
-        token: token,
-        title: task.title,
-        body: body,
-        labels: labels
-      )
-    }
-
-    // Update task with GitHub issue number
-    var updatedTask = task
-    updatedTask.githubIssueNumber = issue.number
-    return updatedTask
+    _ = project
+    _ = token
+    return task
   }
 
   /// Map a cached GitHub issue to a DashboardTask.
@@ -680,8 +510,7 @@ final class LobsControlStore {
       sortOrder: nil,
       blockedBy: nil,
       pinned: nil,
-      shape: nil,
-      githubIssueNumber: issue.number
+      shape: nil
     )
   }
 

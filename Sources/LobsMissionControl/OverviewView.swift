@@ -3094,6 +3094,8 @@ private struct WorkerHistoryRow: View {
     }
   }
 }
+}
+
 
 // MARK: - Token Count Formatter
 

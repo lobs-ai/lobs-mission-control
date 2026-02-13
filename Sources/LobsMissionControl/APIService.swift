@@ -1605,9 +1605,9 @@ private struct ProjectUpdate: Codable {
     self.archived = project.archived
     self.type = project.type?.rawValue
     self.sortOrder = project.sortOrder
-    self.tracking = project.tracking?.rawValue
-    self.githubRepo = project.github?.repo
-    self.githubLabelFilter = project.github?.labelFilter
+    self.tracking = nil
+    self.githubRepo = nil
+    self.githubLabelFilter = nil
   }
   
   enum CodingKeys: String, CodingKey {
@@ -1686,7 +1686,6 @@ private struct TaskUpdateRequest: Codable {
   let blockedBy: [String]?
   let pinned: Bool?
   let shape: String?
-  let githubIssueNumber: Int?
   let agent: String?
   
   init(
@@ -1704,7 +1703,6 @@ private struct TaskUpdateRequest: Codable {
     blockedBy: [String]? = nil,
     pinned: Bool? = nil,
     shape: String? = nil,
-    githubIssueNumber: Int? = nil,
     agent: String? = nil
   ) {
     self.title = title
@@ -1721,7 +1719,6 @@ private struct TaskUpdateRequest: Codable {
     self.blockedBy = blockedBy
     self.pinned = pinned
     self.shape = shape
-    self.githubIssueNumber = githubIssueNumber
     self.agent = agent
   }
   
@@ -1740,7 +1737,6 @@ private struct TaskUpdateRequest: Codable {
     self.blockedBy = task.blockedBy
     self.pinned = task.pinned
     self.shape = task.shape?.rawValue
-    self.githubIssueNumber = task.githubIssueNumber
     self.agent = task.agent
   }
   
@@ -1759,7 +1755,6 @@ private struct TaskUpdateRequest: Codable {
     case blockedBy = "blocked_by"
     case pinned
     case shape
-    case githubIssueNumber = "github_issue_number"
     case agent
   }
 }
