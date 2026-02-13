@@ -13,9 +13,10 @@ final class CalendarViewModel: ObservableObject {
     @Published var filterType: String? = nil
     
     // View mode
-    @Published var viewMode: ViewMode = .month
+    @Published var viewMode: ViewMode = .week
     
     enum ViewMode: String, CaseIterable {
+        case week = "Week"
         case month = "Month"
         case upcoming = "Upcoming"
         case today = "Today"
@@ -33,6 +34,10 @@ final class CalendarViewModel: ObservableObject {
         
         do {
             switch viewMode {
+            case .week:
+                let (startOfWeek, endOfWeek) = weekRange(for: selectedDate)
+                events = try await apiService.fetchCalendarRange(start: startOfWeek, end: endOfWeek)
+                
             case .month:
                 let calendar = Calendar.current
                 let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedDate))!
@@ -150,10 +155,52 @@ final class CalendarViewModel: ObservableObject {
     
     func selectDate(_ date: Date) {
         selectedDate = date
-        if viewMode == .month {
+        if viewMode == .month || viewMode == .week {
             Task {
                 await loadEvents()
             }
+        }
+    }
+    
+    func weekRange(for date: Date) -> (start: Date, end: Date) {
+        let calendar = Calendar.current
+        let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        let endOfWeek = calendar.date(byAdding: .day, value: 6, to: startOfWeek) ?? date
+        
+        // Set end of day for endOfWeek
+        let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endOfWeek) ?? endOfWeek
+        
+        return (startOfWeek, endOfDay)
+    }
+    
+    func daysInWeek(for date: Date) -> [Date] {
+        let (startOfWeek, _) = weekRange(for: date)
+        let calendar = Calendar.current
+        return (0..<7).compactMap { day in
+            calendar.date(byAdding: .day, value: day, to: startOfWeek)
+        }
+    }
+    
+    func goToToday() {
+        selectedDate = Date()
+        Task {
+            await loadEvents()
+        }
+    }
+    
+    func previousWeek() {
+        let calendar = Calendar.current
+        selectedDate = calendar.date(byAdding: .weekOfYear, value: -1, to: selectedDate) ?? selectedDate
+        Task {
+            await loadEvents()
+        }
+    }
+    
+    func nextWeek() {
+        let calendar = Calendar.current
+        selectedDate = calendar.date(byAdding: .weekOfYear, value: 1, to: selectedDate) ?? selectedDate
+        Task {
+            await loadEvents()
         }
     }
 }

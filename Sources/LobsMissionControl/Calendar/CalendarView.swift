@@ -4,6 +4,7 @@ struct CalendarView: View {
     @StateObject private var viewModel: CalendarViewModel
     @State private var showingNewEventSheet = false
     @State private var showingEditEventSheet = false
+    @State private var selectedTimeSlot: Date?
     
     init(apiService: APIService) {
         _viewModel = StateObject(wrappedValue: CalendarViewModel(apiService: apiService))
@@ -13,17 +14,17 @@ struct CalendarView: View {
         HSplitView {
             // Left side: Calendar/List view
             leftPanel
-                .frame(minWidth: 300, idealWidth: 400)
+                .frame(minWidth: 400, idealWidth: 600)
             
             // Right side: Event detail
             rightPanel
-                .frame(minWidth: 300, idealWidth: 500)
+                .frame(minWidth: 300, idealWidth: 400)
         }
         .toolbar {
             toolbarContent
         }
         .sheet(isPresented: $showingNewEventSheet) {
-            NewEventSheet(viewModel: viewModel)
+            NewEventSheet(viewModel: viewModel, preselectedDate: selectedTimeSlot)
         }
         .sheet(isPresented: $showingEditEventSheet) {
             if let event = viewModel.selectedEvent {
@@ -40,7 +41,7 @@ struct CalendarView: View {
     @ViewBuilder
     var leftPanel: some View {
         VStack(spacing: 0) {
-            // View mode picker
+            // View mode picker - prominent segmented control
             Picker("View Mode", selection: $viewModel.viewMode) {
                 ForEach(CalendarViewModel.ViewMode.allCases, id: \.self) { mode in
                     Text(mode.rawValue).tag(mode)
@@ -59,140 +60,70 @@ struct CalendarView: View {
                 ProgressView("Loading events...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = viewModel.errorMessage {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundColor(.orange)
-                    Text("Error loading events")
-                        .font(.headline)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                    Button("Retry") {
-                        Task {
-                            await viewModel.loadEvents()
-                        }
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                errorView(error)
             } else {
                 contentView
             }
         }
     }
     
+    func errorView(_ error: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundColor(.orange)
+            Text("Error loading events")
+                .font(.headline)
+            Text(error)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Retry") {
+                Task {
+                    await viewModel.loadEvents()
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
     @ViewBuilder
     var contentView: some View {
         switch viewModel.viewMode {
+        case .week:
+            WeekView(
+                viewModel: viewModel,
+                onEventTap: { event in
+                    viewModel.selectedEvent = event
+                },
+                onTimeSlotDoubleTap: { date in
+                    selectedTimeSlot = date
+                    showingNewEventSheet = true
+                }
+            )
+            
         case .month:
-            monthView
+            MonthView(
+                viewModel: viewModel,
+                onEventTap: { event in
+                    viewModel.selectedEvent = event
+                },
+                onDayTap: { date in
+                    viewModel.selectedDate = date
+                },
+                onDayDoubleClick: { date in
+                    // Switch to week view for this day's week
+                    viewModel.selectedDate = date
+                    viewModel.viewMode = .week
+                    Task {
+                        await viewModel.loadEvents()
+                    }
+                }
+            )
+            
         case .upcoming, .today:
             listView
-        }
-    }
-    
-    var monthView: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Month/year header with navigation
-                HStack {
-                    Button(action: previousMonth) {
-                        Image(systemName: "chevron.left")
-                    }
-                    
-                    Spacer()
-                    
-                    Text(monthYearFormatter.string(from: viewModel.selectedDate))
-                        .font(.headline)
-                    
-                    Spacer()
-                    
-                    Button(action: nextMonth) {
-                        Image(systemName: "chevron.right")
-                    }
-                }
-                .padding(.horizontal)
-                
-                // Days of week header
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                    ForEach(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], id: \.self) { day in
-                        Text(day)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.horizontal)
-                
-                // Calendar grid
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                    ForEach(daysInMonth(), id: \.self) { date in
-                        if let date = date {
-                            dayCell(for: date)
-                        } else {
-                            // Empty cell for padding
-                            Color.clear
-                                .frame(height: 60)
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .padding(.vertical)
-        }
-    }
-    
-    func dayCell(for date: Date) -> some View {
-        let eventsForDay = viewModel.eventsForDate(date)
-        let isToday = Calendar.current.isDateInToday(date)
-        let isSelected = Calendar.current.isDate(date, inSameDayAs: viewModel.selectedDate)
-        
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("\(Calendar.current.component(.day, from: date))")
-                .font(.system(size: 14, weight: isToday ? .bold : .regular))
-                .foregroundColor(isToday ? .white : .primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(4)
-                .background(isToday ? Color.accentColor : Color.clear)
-                .clipShape(Circle())
-            
-            // Event indicators
-            if !eventsForDay.isEmpty {
-                ForEach(eventsForDay.prefix(3)) { event in
-                    HStack(spacing: 2) {
-                        Circle()
-                            .fill(colorForEventType(event.eventType))
-                            .frame(width: 4, height: 4)
-                        Text(event.title)
-                            .font(.system(size: 10))
-                            .lineLimit(1)
-                    }
-                }
-                
-                if eventsForDay.count > 3 {
-                    Text("+\(eventsForDay.count - 3) more")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            Spacer()
-        }
-        .frame(height: 80)
-        .frame(maxWidth: .infinity)
-        .background(isSelected ? Color.accentColor.opacity(0.1) : Theme.cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
-        )
-        .onTapGesture {
-            viewModel.selectedDate = date
-            if let firstEvent = eventsForDay.first {
-                viewModel.selectedEvent = firstEvent
-            }
         }
     }
     
@@ -202,18 +133,7 @@ struct CalendarView: View {
                 let grouped = viewModel.groupedEventsByDay()
                 
                 if grouped.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                        Text("No events")
-                            .font(.headline)
-                        Text(viewModel.viewMode == .today ? "No events scheduled for today" : "No upcoming events")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 60)
+                    emptyStateView
                 } else {
                     ForEach(grouped, id: \.0) { date, events in
                         VStack(alignment: .leading, spacing: 8) {
@@ -231,6 +151,27 @@ struct CalendarView: View {
             }
             .padding()
         }
+    }
+    
+    var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "calendar")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            Text("No events")
+                .font(.headline)
+            Text(viewModel.viewMode == .today ? "No events scheduled for today" : "No upcoming events")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Button("New Event") {
+                showingNewEventSheet = true
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
     
     func eventRow(_ event: ScheduledEvent) -> some View {
@@ -294,6 +235,7 @@ struct CalendarView: View {
                     )
             )
         }
+        .contentShape(Rectangle())
         .onTapGesture {
             viewModel.selectedEvent = event
         }
@@ -380,6 +322,14 @@ struct CalendarView: View {
                                 Text("to \(dateTimeFormatter.string(from: endAt))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+                                
+                                // Duration
+                                let duration = endAt.timeIntervalSince(event.scheduledAt) / 3600.0
+                                if duration > 0 {
+                                    Text(durationString(duration))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                             
                             if let allDay = event.allDay, allDay {
@@ -397,8 +347,14 @@ struct CalendarView: View {
                                 .foregroundColor(.secondary)
                                 .frame(width: 24)
                             
-                            Text(type.capitalized)
-                                .font(.body)
+                            HStack {
+                                Circle()
+                                    .fill(colorForEventType(type))
+                                    .frame(width: 10, height: 10)
+                                
+                                Text(type.capitalized)
+                                    .font(.body)
+                            }
                         }
                     }
                     
@@ -417,7 +373,7 @@ struct CalendarView: View {
                     // Status
                     if let status = event.status {
                         HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "checkmark.circle")
+                            Image(systemName: statusIcon(status))
                                 .foregroundColor(.secondary)
                                 .frame(width: 24)
                             
@@ -459,22 +415,47 @@ struct CalendarView: View {
                 
                 Divider()
                 
-                Button("Reminders") {
+                Button {
                     viewModel.setFilter("reminder")
+                } label: {
+                    HStack {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 8, height: 8)
+                        Text("Reminders")
+                    }
                 }
                 
-                Button("Tasks") {
+                Button {
                     viewModel.setFilter("task")
+                } label: {
+                    HStack {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 8, height: 8)
+                        Text("Tasks")
+                    }
                 }
                 
-                Button("Meetings") {
+                Button {
                     viewModel.setFilter("meeting")
+                } label: {
+                    HStack {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                        Text("Meetings")
+                    }
                 }
             } label: {
-                Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                Label(
+                    viewModel.filterType?.capitalized ?? "Filter",
+                    systemImage: "line.3.horizontal.decrease.circle"
+                )
             }
             
             Button {
+                selectedTimeSlot = nil
                 showingNewEventSheet = true
             } label: {
                 Label("New Event", systemImage: "plus")
@@ -489,6 +470,62 @@ struct CalendarView: View {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
             .keyboardShortcut("r", modifiers: .command)
+        }
+    }
+    
+    // MARK: - Navigation
+    
+    func navigatePrevious() {
+        let calendar = Calendar.current
+        switch viewModel.viewMode {
+        case .week:
+            viewModel.selectedDate = calendar.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        case .month:
+            viewModel.selectedDate = calendar.date(byAdding: .month, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        case .today, .upcoming:
+            viewModel.selectedDate = calendar.date(byAdding: .day, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        }
+        Task {
+            await viewModel.loadEvents()
+        }
+    }
+    
+    func navigateNext() {
+        let calendar = Calendar.current
+        switch viewModel.viewMode {
+        case .week:
+            viewModel.selectedDate = calendar.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        case .month:
+            viewModel.selectedDate = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        case .today, .upcoming:
+            viewModel.selectedDate = calendar.date(byAdding: .day, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        }
+        Task {
+            await viewModel.loadEvents()
+        }
+    }
+    
+    func navigateUp() {
+        let calendar = Calendar.current
+        if viewModel.viewMode == .week {
+            viewModel.selectedDate = calendar.date(byAdding: .day, value: -7, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        } else {
+            viewModel.selectedDate = calendar.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        }
+        Task {
+            await viewModel.loadEvents()
+        }
+    }
+    
+    func navigateDown() {
+        let calendar = Calendar.current
+        if viewModel.viewMode == .week {
+            viewModel.selectedDate = calendar.date(byAdding: .day, value: 7, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        } else {
+            viewModel.selectedDate = calendar.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+        }
+        Task {
+            await viewModel.loadEvents()
         }
     }
     
@@ -508,36 +545,32 @@ struct CalendarView: View {
         }
     }
     
-    func previousMonth() {
-        viewModel.selectedDate = Calendar.current.date(byAdding: .month, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-        Task {
-            await viewModel.loadEvents()
+    func statusIcon(_ status: String) -> String {
+        switch status.lowercased() {
+        case "completed":
+            return "checkmark.circle.fill"
+        case "cancelled":
+            return "xmark.circle.fill"
+        default:
+            return "circle"
         }
     }
     
-    func nextMonth() {
-        viewModel.selectedDate = Calendar.current.date(byAdding: .month, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-        Task {
-            await viewModel.loadEvents()
+    func durationString(_ hours: Double) -> String {
+        if hours < 1 {
+            let minutes = Int(hours * 60)
+            return "\(minutes) min"
+        } else if hours == 1 {
+            return "1 hour"
+        } else {
+            let h = Int(hours)
+            let m = Int((hours - Double(h)) * 60)
+            if m == 0 {
+                return "\(h) hours"
+            } else {
+                return "\(h)h \(m)m"
+            }
         }
-    }
-    
-    func daysInMonth() -> [Date?] {
-        let calendar = Calendar.current
-        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: viewModel.selectedDate))!
-        let range = calendar.range(of: .day, in: .month, for: startOfMonth)!
-        
-        let firstWeekday = calendar.component(.weekday, from: startOfMonth)
-        let leadingDays = firstWeekday - 1
-        
-        var days: [Date?] = Array(repeating: nil, count: leadingDays)
-        
-        for day in range {
-            let date = calendar.date(byAdding: .day, value: day - 1, to: startOfMonth)
-            days.append(date)
-        }
-        
-        return days
     }
     
     private let dateFormatter: DateFormatter = {
@@ -557,28 +590,32 @@ struct CalendarView: View {
         f.dateFormat = "MMM d, yyyy 'at' h:mm a"
         return f
     }()
-    
-    private let monthYearFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "MMMM yyyy"
-        return f
-    }()
 }
 
 // MARK: - New Event Sheet
 
 struct NewEventSheet: View {
     @ObservedObject var viewModel: CalendarViewModel
+    let preselectedDate: Date?
     @Environment(\.dismiss) var dismiss
     
     @State private var title = ""
     @State private var description = ""
     @State private var eventType = "reminder"
-    @State private var scheduledAt = Date()
+    @State private var scheduledAt: Date
     @State private var hasEndTime = false
-    @State private var endAt = Date()
+    @State private var endAt: Date
     @State private var allDay = false
     @State private var isSubmitting = false
+    
+    init(viewModel: CalendarViewModel, preselectedDate: Date? = nil) {
+        self.viewModel = viewModel
+        self.preselectedDate = preselectedDate
+        
+        let initialDate = preselectedDate ?? Date()
+        _scheduledAt = State(initialValue: initialDate)
+        _endAt = State(initialValue: Calendar.current.date(byAdding: .hour, value: 1, to: initialDate) ?? initialDate)
+    }
     
     var body: some View {
         Form {
@@ -593,9 +630,20 @@ struct NewEventSheet: View {
                     )
                 
                 Picker("Type", selection: $eventType) {
-                    Text("Reminder").tag("reminder")
-                    Text("Task").tag("task")
-                    Text("Meeting").tag("meeting")
+                    HStack {
+                        Circle().fill(Color.orange).frame(width: 8, height: 8)
+                        Text("Reminder")
+                    }.tag("reminder")
+                    
+                    HStack {
+                        Circle().fill(Color.blue).frame(width: 8, height: 8)
+                        Text("Task")
+                    }.tag("task")
+                    
+                    HStack {
+                        Circle().fill(Color.green).frame(width: 8, height: 8)
+                        Text("Meeting")
+                    }.tag("meeting")
                 }
             }
             
@@ -697,9 +745,20 @@ struct EditEventSheet: View {
                     )
                 
                 Picker("Type", selection: $eventType) {
-                    Text("Reminder").tag("reminder")
-                    Text("Task").tag("task")
-                    Text("Meeting").tag("meeting")
+                    HStack {
+                        Circle().fill(Color.orange).frame(width: 8, height: 8)
+                        Text("Reminder")
+                    }.tag("reminder")
+                    
+                    HStack {
+                        Circle().fill(Color.blue).frame(width: 8, height: 8)
+                        Text("Task")
+                    }.tag("task")
+                    
+                    HStack {
+                        Circle().fill(Color.green).frame(width: 8, height: 8)
+                        Text("Meeting")
+                    }.tag("meeting")
                 }
                 
                 Picker("Status", selection: $status) {
