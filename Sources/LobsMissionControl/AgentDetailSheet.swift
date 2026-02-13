@@ -8,9 +8,6 @@ struct AgentDetailSheet: View {
   @State private var memory: String = ""
   @State private var evolvedTraits: String = ""
   @State private var personality: String = ""
-  @State private var isEditingPersonality = false
-  @State private var editedPersonality: String = ""
-  @State private var isSaving = false
 
   private var status: AgentStatus? { vm.agentStatuses[agentType] }
   private var displayName: String { status?.displayName ?? agentType.capitalized }
@@ -34,18 +31,10 @@ struct AgentDetailSheet: View {
     .background(Theme.boardBg)
     .onAppear(perform: loadData)
     .overlay {
-      // Use custom escape key monitor to properly handle escape
-      // Only skip when actively editing personality
-      AgentDetailEscapeKeyMonitor(isEditingPersonality: isEditingPersonality) {
-        if isEditingPersonality {
-          // Cancel editing mode on escape
-          isEditingPersonality = false
-          editedPersonality = personality
-        } else {
-          // Dismiss sheet on escape
-          withAnimation(.easeInOut(duration: 0.25)) {
-            vm.selectedAgentType = nil
-          }
+      // Use custom escape key monitor to dismiss sheet
+      AgentDetailEscapeKeyMonitor {
+        withAnimation(.easeInOut(duration: 0.25)) {
+          vm.selectedAgentType = nil
         }
       }
       .frame(width: 0, height: 0)
@@ -159,58 +148,18 @@ struct AgentDetailSheet: View {
 
   private var personalitySection: some View {
     VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Label("Personality (SOUL.md)", systemImage: "sparkles")
-          .font(.headline)
-        Spacer()
-        if isEditingPersonality {
-          Button("Cancel") {
-            isEditingPersonality = false
-            editedPersonality = personality
-          }
-          .buttonStyle(.plain)
-          .foregroundStyle(.secondary)
+      Label("Personality (SOUL.md)", systemImage: "sparkles")
+        .font(.headline)
 
-          Button("Save") {
-            savePersonality()
-          }
-          .buttonStyle(.borderedProminent)
-          .controlSize(.small)
-          .disabled(isSaving || editedPersonality == personality)
-        } else {
-          Button("Edit") {
-            editedPersonality = personality
-            isEditingPersonality = true
-          }
-          .buttonStyle(.plain)
-          .foregroundStyle(.blue)
-        }
-      }
-
-      if isEditingPersonality {
-        TextEditor(text: $editedPersonality)
-          .font(.system(size: 12, design: .monospaced))
-          .frame(minHeight: 200)
-          .padding(4)
-          .background(
-            RoundedRectangle(cornerRadius: 6)
-              .fill(Theme.cardBg)
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 6)
-              .stroke(Theme.border)
-          )
-      } else {
-        Text(personality.isEmpty ? "(no personality set)" : personality)
-          .font(.system(size: 12, design: .monospaced))
-          .foregroundStyle(personality.isEmpty ? .tertiary : .primary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(10)
-          .background(
-            RoundedRectangle(cornerRadius: 6)
-              .fill(Theme.cardBg)
-          )
-      }
+      Text(personality.isEmpty ? "(no personality set)" : personality)
+        .font(.system(size: 12, design: .monospaced))
+        .foregroundStyle(personality.isEmpty ? .tertiary : .primary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(
+          RoundedRectangle(cornerRadius: 6)
+            .fill(Theme.cardBg)
+        )
     }
   }
 
@@ -282,7 +231,6 @@ struct AgentDetailSheet: View {
         if let soulContent = try await vm.apiService?.loadAgentFile(agentType: agentType, filename: "SOUL.md") {
           await MainActor.run {
             self.personality = soulContent
-            self.editedPersonality = soulContent
           }
         }
       } catch {
@@ -292,35 +240,13 @@ struct AgentDetailSheet: View {
       }
     }
   }
-
-  private func savePersonality() {
-    isSaving = true
-    Task {
-      do {
-        // Save personality to API
-        try await vm.apiService?.saveAgentFile(agentType: agentType, filename: "SOUL.md", content: editedPersonality)
-        
-        await MainActor.run {
-          self.personality = self.editedPersonality
-          self.isEditingPersonality = false
-          self.isSaving = false
-        }
-      } catch {
-        await MainActor.run {
-          self.isSaving = false
-          vm.flashError("Failed to save personality: \(error.localizedDescription)")
-        }
-      }
-    }
-  }
 }
 
 // MARK: - Agent Detail Escape Key Monitor
 
 /// NSEvent-based escape key handler for AgentDetailSheet.
-/// Handles escape key intelligently based on editing state.
+/// Dismisses the sheet when escape is pressed.
 private struct AgentDetailEscapeKeyMonitor: NSViewRepresentable {
-  let isEditingPersonality: Bool
   let onEscape: () -> Void
 
   func makeNSView(context: Context) -> NSView {
@@ -328,13 +254,10 @@ private struct AgentDetailEscapeKeyMonitor: NSViewRepresentable {
     context.coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
       // Only handle escape key (keyCode 53)
       if event.keyCode == 53 {
-        // When not editing personality, check if any text field is focused
-        // and let it handle escape first (e.g., for autocomplete dismissal)
-        if !self.isEditingPersonality {
-          if let responder = NSApp.keyWindow?.firstResponder,
-             responder is NSTextView || responder is NSTextField {
-            return event
-          }
+        // Check if any text field is focused and let it handle escape first
+        if let responder = NSApp.keyWindow?.firstResponder,
+           responder is NSTextView || responder is NSTextField {
+          return event
         }
         DispatchQueue.main.async { self.onEscape() }
         return nil

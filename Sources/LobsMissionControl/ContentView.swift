@@ -1299,23 +1299,29 @@ private struct ToolbarArea: View {
         let activeProjects = vm.sortedActiveProjects
         ForEach(activeProjects, id: \.id) { p in
           let activeCount = vm.tasks.filter { ($0.projectId ?? "default") == p.id && $0.status == .active }.count
+          let typeColor = projectTypeAccentColor(p.resolvedType)
           Button {
             vm.selectedProjectId = p.id
             vm.showOverview = false
           } label: {
-            HStack {
+            HStack(spacing: 8) {
               if !vm.showOverview && vm.selectedProjectId == p.id {
-                Image(systemName: "checkmark")
+                Image(systemName: "checkmark.circle.fill")
+                  .foregroundColor(typeColor)
               }
               Image(systemName: projectTypeIcon(p.resolvedType))
+                .foregroundColor(typeColor)
+                .font(.body)
               Text(p.title)
+                .fontWeight(!vm.showOverview && vm.selectedProjectId == p.id ? .semibold : .regular)
+              Spacer()
               if activeCount > 0 {
                 Text("\(activeCount)")
-                  .font(.system(size: 10, weight: .bold))
+                  .font(.system(size: 11, weight: .bold))
                   .foregroundColor(.white)
-                  .padding(.horizontal, 5)
-                  .padding(.vertical, 2)
-                  .background(Color.blue.opacity(0.8))
+                  .padding(.horizontal, 6)
+                  .padding(.vertical, 3)
+                  .background(typeColor)
                   .clipShape(Capsule())
               }
             }

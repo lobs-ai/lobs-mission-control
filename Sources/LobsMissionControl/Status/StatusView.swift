@@ -192,12 +192,8 @@ private struct ServerCard: View {
         
         if let server = server {
           VStack(alignment: .leading, spacing: 6) {
-            if let uptime = server.uptime {
-              StatRow(label: "Uptime", value: formatUptime(uptime))
-            }
-            if let version = server.version {
-              StatRow(label: "Version", value: version)
-            }
+            StatRow(label: "Uptime", value: formatUptime(server.uptimeSeconds))
+            StatRow(label: "Version", value: server.version)
           }
         } else {
           Text("No data")
@@ -208,9 +204,9 @@ private struct ServerCard: View {
     }
   }
   
-  private func formatUptime(_ seconds: TimeInterval) -> String {
-    let hours = Int(seconds / 3600)
-    let minutes = Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60)
+  private func formatUptime(_ seconds: Int) -> String {
+    let hours = seconds / 3600
+    let minutes = (seconds % 3600) / 60
     if hours > 24 {
       let days = hours / 24
       return "\(days)d \(hours % 24)h"
@@ -239,19 +235,15 @@ private struct OrchestratorCard: View {
           Text("Orchestrator")
             .font(.headline)
           Spacer()
-          if let state = orchestrator?.state {
-            StateBadge(state: state)
+          if let orchestrator = orchestrator {
+            StateBadge(state: derivedState(orchestrator))
           }
         }
         
         if let orchestrator = orchestrator {
           VStack(alignment: .leading, spacing: 8) {
-            if let uptime = orchestrator.uptime {
-              StatRow(label: "Uptime", value: formatUptime(uptime))
-            }
-            
             HStack(spacing: 8) {
-              if orchestrator.state == "running" {
+              if orchestrator.running && !orchestrator.paused {
                 Button {
                   onPause()
                 } label: {
@@ -264,7 +256,7 @@ private struct OrchestratorCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
-              } else if orchestrator.state == "paused" {
+              } else if orchestrator.paused {
                 Button {
                   onResume()
                 } label: {
@@ -289,16 +281,13 @@ private struct OrchestratorCard: View {
     }
   }
   
-  private func formatUptime(_ seconds: TimeInterval) -> String {
-    let hours = Int(seconds / 3600)
-    let minutes = Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60)
-    if hours > 24 {
-      let days = hours / 24
-      return "\(days)d \(hours % 24)h"
-    } else if hours > 0 {
-      return "\(hours)h \(minutes)m"
+  private func derivedState(_ orchestrator: SystemOverview.OrchestratorStatus) -> String {
+    if orchestrator.paused {
+      return "paused"
+    } else if orchestrator.running {
+      return "running"
     } else {
-      return "\(minutes)m"
+      return "stopped"
     }
   }
 }
@@ -319,7 +308,7 @@ private struct WorkersCard: View {
             .font(.headline)
           Spacer()
           if let workers = workers {
-            Text("\(workers.activeCount)")
+            Text("\(workers.active)")
               .font(.title2.bold())
               .foregroundStyle(.green)
           }
@@ -327,36 +316,9 @@ private struct WorkersCard: View {
         
         if let workers = workers {
           VStack(alignment: .leading, spacing: 6) {
-            StatRow(label: "Active", value: "\(workers.activeCount)")
-            StatRow(label: "Completed", value: "\(workers.completedCount)")
-            StatRow(label: "Failed", value: "\(workers.failedCount)")
-          }
-          
-          if !workers.activeWorkers.isEmpty {
-            Divider()
-            VStack(alignment: .leading, spacing: 4) {
-              Text("Active Workers")
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-              ForEach(workers.activeWorkers) { worker in
-                HStack(spacing: 6) {
-                  Circle()
-                    .fill(Color.green)
-                    .frame(width: 6, height: 6)
-                  Text(worker.agentType)
-                    .font(.caption)
-                  if let title = worker.taskTitle {
-                    Text("→")
-                      .font(.caption)
-                      .foregroundStyle(.tertiary)
-                    Text(title)
-                      .font(.caption)
-                      .foregroundStyle(.secondary)
-                      .lineLimit(1)
-                  }
-                }
-              }
-            }
+            StatRow(label: "Active", value: "\(workers.active)")
+            StatRow(label: "Completed", value: "\(workers.totalCompleted)")
+            StatRow(label: "Failed", value: "\(workers.totalFailed)")
           }
         } else {
           Text("No data")
@@ -377,15 +339,13 @@ private struct AgentCard: View {
     CardContainer(compact: true) {
       VStack(alignment: .leading, spacing: 8) {
         HStack {
-          Image(systemName: agentIcon(agent.agentType))
+          Image(systemName: agentIcon(agent.type))
             .font(.body)
-            .foregroundStyle(agentColor(agent.agentType))
-          Text(agent.agentType.capitalized)
+            .foregroundStyle(agentColor(agent.type))
+          Text(agent.type.capitalized)
             .font(.subheadline.bold())
           Spacer()
-          if let health = agent.health {
-            HealthDot(health: health)
-          }
+          StatusDot(status: agent.status)
         }
         
         VStack(alignment: .leading, spacing: 4) {
@@ -397,12 +357,6 @@ private struct AgentCard: View {
             Text("Never active")
               .font(.caption2)
               .foregroundStyle(.tertiary)
-          }
-          
-          if let activeCount = agent.activeTaskCount, activeCount > 0 {
-            Text("\(activeCount) active \(activeCount == 1 ? "task" : "tasks")")
-              .font(.caption2)
-              .foregroundStyle(.blue)
           }
         }
       }
@@ -597,9 +551,9 @@ private struct CostSummaryView: View {
               .font(.caption.bold())
               .foregroundStyle(.secondary)
             
-            ForEach(costs.byAgent.sorted(by: { $0.value.tokensUsed > $1.value.tokensUsed }), id: \.key) { agent, cost in
+            ForEach(costs.byAgent.sorted(by: { $0.tokensTotal > $1.tokensTotal })) { cost in
               HStack {
-                Text(agent.capitalized)
+                Text(cost.type.capitalized)
                   .font(.caption)
                 Spacer()
                 Text("$\(cost.estimatedCost, specifier: "%.2f")")

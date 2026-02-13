@@ -117,20 +117,32 @@ private struct ConnectionStatusBar: View {
     let connectionState: ChatConnectionState
     
     var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
-            
-            Text(statusText)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            
-            Spacer()
+        // Only show status bar when not connected or when there's an error
+        if shouldShowStatus {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 6, height: 6)
+                
+                Text(statusText)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(statusBackground)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+    }
+    
+    private var shouldShowStatus: Bool {
+        switch connectionState {
+        case .connected:
+            return false // Don't show when connected
+        default:
+            return true
+        }
     }
     
     private var statusColor: Color {
@@ -138,16 +150,29 @@ private struct ConnectionStatusBar: View {
         case .connected:
             return .green
         case .connecting, .reconnecting:
-            return .yellow
-        case .disconnected, .error:
+            return .orange
+        case .disconnected:
+            return .gray
+        case .error:
             return .red
+        }
+    }
+    
+    private var statusBackground: Color {
+        switch connectionState {
+        case .error:
+            return Color.red.opacity(0.05)
+        case .reconnecting:
+            return Color.orange.opacity(0.05)
+        default:
+            return Color.clear
         }
     }
     
     private var statusText: String {
         switch connectionState {
         case .disconnected:
-            return "Disconnected"
+            return "Not connected"
         case .connecting:
             return "Connecting..."
         case .connected(let sessionKey):
@@ -155,7 +180,7 @@ private struct ConnectionStatusBar: View {
         case .reconnecting:
             return "Reconnecting..."
         case .error(let message):
-            return "Error: \(message)"
+            return "Connection error: \(message)"
         }
     }
 }

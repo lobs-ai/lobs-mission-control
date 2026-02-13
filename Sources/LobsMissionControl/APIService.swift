@@ -3,6 +3,7 @@ import Foundation
 enum APIError: Error, LocalizedError {
   case invalidURL
   case invalidResponse
+  case notAuthenticated
   case conflict(message: String)
   case validation(message: String)
   case notFound(message: String)
@@ -20,6 +21,8 @@ enum APIError: Error, LocalizedError {
       return "Invalid API URL"
     case .invalidResponse:
       return "Invalid API response"
+    case .notAuthenticated:
+      return "Not authenticated — add your API token in Settings"
     case .conflict(let message):
       return message
     case .validation(let message):
@@ -45,6 +48,11 @@ enum APIError: Error, LocalizedError {
   
   /// Parse a user-friendly error message from FastAPI error response
   static func parseErrorResponse(_ data: Data, statusCode: Int) -> APIError {
+    // Check for 401 Unauthorized first
+    if statusCode == 401 {
+      return .notAuthenticated
+    }
+    
     // Try to parse FastAPI error format: {"detail": "..."}
     struct FastAPIError: Codable {
       let detail: String

@@ -70,59 +70,76 @@ struct CommandCenterView: View {
   }
   
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        // Header
-        HStack {
-          VStack(alignment: .leading, spacing: 4) {
-            Text("Command Center")
-              .font(.largeTitle.bold())
-            Text(greetingText())
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
+    ZStack(alignment: .top) {
+      // Gradient background at top
+      LinearGradient(
+        gradient: Gradient(colors: [
+          Color.blue.opacity(0.08),
+          Color.purple.opacity(0.05),
+          Color.clear
+        ]),
+        startPoint: .top,
+        endPoint: .bottom
+      )
+      .frame(height: 300)
+      .ignoresSafeArea()
+      
+      ScrollView {
+        VStack(alignment: .leading, spacing: 24) {
+          // Header
+          VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+              VStack(alignment: .leading, spacing: 6) {
+                Text("Command Center")
+                  .font(.system(size: 36, weight: .bold))
+                Text(greetingText())
+                  .font(.title3)
+                  .foregroundStyle(.secondary)
+              }
+              
+              Spacer()
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 28)
+            
+            // Quick Actions
+            HStack(spacing: 14) {
+              QuickActionButton(
+                icon: "plus.circle.fill",
+                label: "New Task",
+                color: .blue,
+                action: { onNewTask?() }
+              )
+              
+              QuickActionButton(
+                icon: "brain.head.profile",
+                label: "Capture Thought",
+                color: .purple,
+                action: { onOpenMemory?() }
+              )
+              
+              QuickActionButton(
+                icon: "magnifyingglass.circle.fill",
+                label: "Start Research",
+                color: .orange,
+                action: { onStartResearch?() }
+              )
+              
+              QuickActionButton(
+                icon: "message.circle.fill",
+                label: "Open Chat",
+                color: .green,
+                action: { onOpenChat?() }
+              )
+            }
+            .padding(.horizontal, 24)
           }
-          
-          Spacer()
-          
-          // Quick Actions
-          HStack(spacing: 12) {
-            QuickActionButton(
-              icon: "plus.circle.fill",
-              label: "New Task",
-              color: .blue,
-              action: { onNewTask?() }
-            )
-            
-            QuickActionButton(
-              icon: "brain.head.profile",
-              label: "Capture Thought",
-              color: .purple,
-              action: { onOpenMemory?() }
-            )
-            
-            QuickActionButton(
-              icon: "magnifyingglass.circle.fill",
-              label: "Start Research",
-              color: .orange,
-              action: { onStartResearch?() }
-            )
-            
-            QuickActionButton(
-              icon: "message.circle.fill",
-              label: "Open Chat",
-              color: .green,
-              action: { onOpenChat?() }
-            )
-          }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
         
-        // Main grid of cards
-        LazyVGrid(columns: [
-          GridItem(.flexible()),
-          GridItem(.flexible())
-        ], spacing: 16) {
+          // Main grid of cards
+          LazyVGrid(columns: [
+            GridItem(.flexible()),
+            GridItem(.flexible())
+          ], spacing: 20) {
           // While You Were Away (full width)
           if showWhileYouWereAway {
             WhileYouWereAwayCard(
@@ -161,9 +178,10 @@ struct CommandCenterView: View {
           RecentMemoriesCard(
             onViewAll: { onOpenMemory?() }
           )
+          }
+          .padding(.horizontal, 24)
+          .padding(.bottom, 28)
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 20)
       }
     }
     .background(Color(NSColor.controlBackgroundColor))
@@ -737,13 +755,13 @@ private struct HomeCardContainer<Content: View>: View {
   
   var body: some View {
     content
-      .padding(16)
+      .padding(20)
       .background(Color(NSColor.windowBackgroundColor))
-      .clipShape(RoundedRectangle(cornerRadius: 12))
+      .clipShape(RoundedRectangle(cornerRadius: 16))
       .overlay(
-        RoundedRectangle(cornerRadius: 12)
-          .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        RoundedRectangle(cornerRadius: 16)
+          .stroke(Color.primary.opacity(0.08), lineWidth: 1)
       )
-      .shadow(color: Color.black.opacity(0.05), radius: 3, y: 1)
+      .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
   }
 }
