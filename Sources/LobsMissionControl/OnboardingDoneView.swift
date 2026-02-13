@@ -23,7 +23,7 @@ struct OnboardingDoneView: View {
       VStack(alignment: .leading, spacing: 10) {
         Text("Quick tips")
           .font(.system(size: 13, weight: .semibold))
-        Text("• Use ⌘N for a new task\n• Add projects from the sidebar (+)\n• Settings: ⌘,\n• If sync looks stale, click Push Now")
+        Text("• Use ⌘N to create a new task\n• View your inbox for items that need review\n• Check agent activity and worker status\n• Settings: ⌘,\n• All state syncs automatically with your server")
           .font(.system(size: 12))
           .foregroundColor(.secondary)
       }

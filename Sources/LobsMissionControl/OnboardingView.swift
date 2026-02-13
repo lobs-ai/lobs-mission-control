@@ -300,9 +300,8 @@ struct OnboardingView: View {
 
   private func nextStep(after step: Step) -> Step {
     switch step {
-    case .welcome: return .workspace
-    case .workspace: return .serverGuide
-    case .serverGuide: return .done
+    case .welcome: return .connect
+    case .connect: return .done
     case .done: return .done
     }
   }
@@ -310,9 +309,8 @@ struct OnboardingView: View {
   private func previousStep(before step: Step) -> Step {
     switch step {
     case .welcome: return .welcome
-    case .workspace: return .welcome
-    case .serverGuide: return .workspace
-    case .done: return .serverGuide
+    case .connect: return .welcome
+    case .done: return .connect
     }
   }
 
