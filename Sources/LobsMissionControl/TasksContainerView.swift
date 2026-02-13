@@ -455,6 +455,7 @@ struct TasksContainerView: View {
                             },
                             onAddTask: {
                                 vm.selectedProjectId = project.id
+                                vm.showOverview = false
                                 showAddTask = true
                             },
                             onArchive: {
