@@ -3,9 +3,32 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_BUNDLE="${APP_BUNDLE_DEST:-$REPO_DIR/.build/LobsDashboard.app}"
-EXECUTABLE="$REPO_DIR/.build/arm64-apple-macosx/debug/lobs-dashboard"
 
-if [ ! -f "$EXECUTABLE" ]; then
+# Resolve the executable path dynamically so this works across architectures
+# and with the current binary name.
+resolve_executable() {
+  local candidate
+  for candidate in \
+    "$REPO_DIR/.build/debug/lobs-mission-control" \
+    "$REPO_DIR/.build/debug/lobs-dashboard"; do
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  candidate="$(find "$REPO_DIR/.build" -maxdepth 4 -type f \( -name lobs-mission-control -o -name lobs-dashboard \) | head -n 1)"
+  if [ -n "$candidate" ]; then
+    echo "$candidate"
+    return 0
+  fi
+
+  return 1
+}
+
+EXECUTABLE="$(resolve_executable || true)"
+
+if [ -z "$EXECUTABLE" ] || [ ! -f "$EXECUTABLE" ]; then
   echo "No build found. Run bin/build first." >&2
   exit 1
 fi
@@ -20,10 +43,11 @@ rm -f "$APP_BUNDLE/Contents/MacOS/lobs-dashboard"
 ln -s "$EXECUTABLE" "$APP_BUNDLE/Contents/MacOS/lobs-dashboard"
 
 # Copy bundled resources if they exist
-RESOURCE_DIR="$REPO_DIR/.build/arm64-apple-macosx/debug/LobsDashboard_LobsDashboard.bundle"
+EXECUTABLE_DIR="$(dirname "$EXECUTABLE")"
+RESOURCE_DIR="$EXECUTABLE_DIR/LobsMissionControl_LobsMissionControl.bundle"
 if [ -d "$RESOURCE_DIR" ]; then
-  rm -f "$APP_BUNDLE/Contents/Resources/LobsDashboard_LobsDashboard.bundle"
-  ln -s "$RESOURCE_DIR" "$APP_BUNDLE/Contents/Resources/LobsDashboard_LobsDashboard.bundle"
+  rm -f "$APP_BUNDLE/Contents/Resources/LobsMissionControl_LobsMissionControl.bundle"
+  ln -s "$RESOURCE_DIR" "$APP_BUNDLE/Contents/Resources/LobsMissionControl_LobsMissionControl.bundle"
 fi
 
 # Write Info.plist with a bundle identifier (needed for notifications, etc.)
