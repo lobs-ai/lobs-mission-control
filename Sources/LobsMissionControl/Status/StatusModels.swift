@@ -26,14 +26,6 @@ struct UpdateCheckResponse: Codable {
   let checkedAt: String
 }
 
-struct UpdatePullResponse: Codable {
-  let repo: String
-  let success: Bool
-  let output: String
-  let newCommit: String?
-  let needsRestart: Bool
-}
-
 struct SelfUpdateResponse: Codable {
   let success: Bool
   let pullOutput: String

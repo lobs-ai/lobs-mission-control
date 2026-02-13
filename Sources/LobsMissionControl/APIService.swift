@@ -1858,14 +1858,6 @@ final class APIService {
     )
   }
   
-  func pullUpdate(repo: String) async throws -> UpdatePullResponse {
-    return try await request(
-      method: "POST",
-      path: "/api/status/updates/pull",
-      queryItems: [URLQueryItem(name: "repo", value: repo)]
-    )
-  }
-  
   func selfUpdateMissionControl() async throws -> SelfUpdateResponse {
     return try await request(
       method: "POST",

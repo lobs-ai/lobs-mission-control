@@ -730,12 +730,10 @@ private struct StatRow: View {
 
 private struct UpdatesSection: View {
   let apiService: APIService
-  @State private var updateCheck: UpdateCheckResponse?
+  @State private var updateInfo: RepoUpdateInfo?
   @State private var isChecking = false
-  @State private var pullingRepo: String?
-  @State private var pullResult: UpdatePullResponse?
-  @State private var selfUpdateResult: SelfUpdateResponse?
   @State private var isSelfUpdating = false
+  @State private var selfUpdateResult: SelfUpdateResponse?
   @State private var error: String?
   
   var body: some View {
@@ -780,53 +778,15 @@ private struct UpdatesSection: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
       }
       
-      if let check = updateCheck {
-        if check.hasUpdates {
-          // Show banner
-          HStack(spacing: 8) {
-            Image(systemName: "arrow.down.circle.fill")
-              .foregroundStyle(.blue)
-            Text("Updates available")
-              .font(.subheadline.bold())
-            Spacer()
-            Text("\(check.repos.filter(\.hasUpdate).count) repo(s)")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-          .padding(12)
-          .background(Color.blue.opacity(0.1))
-          .clipShape(RoundedRectangle(cornerRadius: 8))
-        }
-        
-        LazyVGrid(columns: [
-          GridItem(.flexible()),
-          GridItem(.flexible()),
-          GridItem(.flexible())
-        ], spacing: 12) {
-          ForEach(check.repos) { repo in
-            if repo.name == "lobs-mission-control" {
-              RepoCard(
-                repo: repo,
-                isPulling: isSelfUpdating,
-                pullLabel: isSelfUpdating ? "Updating..." : "Update & Relaunch",
-                onPull: { Task { await selfUpdate() } }
-              )
-            } else {
-              RepoCard(
-                repo: repo,
-                isPulling: pullingRepo == repo.name,
-                onPull: { Task { await pullRepo(repo.name) } }
-              )
-            }
-          }
-        }
+      if let info = updateInfo {
+        MissionControlUpdateCard(
+          updateInfo: info,
+          isUpdating: isSelfUpdating,
+          onUpdate: { Task { await selfUpdate() } }
+        )
         
         if let result = selfUpdateResult {
           SelfUpdateResultBanner(result: result, onRelaunch: relaunchApp)
-        }
-        
-        if let result = pullResult {
-          PullResultBanner(result: result)
         }
       } else if !isChecking {
         CardContainer {
@@ -858,7 +818,9 @@ private struct UpdatesSection: View {
     defer { isChecking = false }
     
     do {
-      updateCheck = try await apiService.checkForUpdates()
+      let check = try await apiService.checkForUpdates()
+      // Extract Mission Control info (should be the only repo now)
+      updateInfo = check.repos.first(where: { $0.name == "lobs-mission-control" })
     } catch {
       self.error = "Failed to check updates: \(error.localizedDescription)"
     }
@@ -875,7 +837,8 @@ private struct UpdatesSection: View {
       if result.success {
         // Refresh update check
         try? await Task.sleep(nanoseconds: 500_000_000)
-        updateCheck = try await apiService.checkForUpdates()
+        let check = try await apiService.checkForUpdates()
+        updateInfo = check.repos.first(where: { $0.name == "lobs-mission-control" })
       }
     } catch {
       selfUpdateResult = SelfUpdateResponse(
@@ -893,130 +856,116 @@ private struct UpdatesSection: View {
     try? process.run()
     NSApplication.shared.terminate(nil)
   }
-  
-  private func pullRepo(_ name: String) async {
-    pullingRepo = name
-    pullResult = nil
-    defer { pullingRepo = nil }
-    
-    do {
-      pullResult = try await apiService.pullUpdate(repo: name)
-      // Refresh the update check after pulling
-      if pullResult?.success == true {
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        updateCheck = try await apiService.checkForUpdates()
-      }
-    } catch {
-      pullResult = UpdatePullResponse(
-        repo: name, success: false,
-        output: error.localizedDescription,
-        newCommit: nil, needsRestart: false
-      )
-    }
-  }
 }
 
-private struct RepoCard: View {
-  let repo: RepoUpdateInfo
-  let isPulling: Bool
-  var pullLabel: String? = nil
-  let onPull: () -> Void
+private struct MissionControlUpdateCard: View {
+  let updateInfo: RepoUpdateInfo
+  let isUpdating: Bool
+  let onUpdate: () -> Void
   
   var body: some View {
     CardContainer {
-      VStack(alignment: .leading, spacing: 10) {
+      VStack(alignment: .leading, spacing: 12) {
+        // Header
         HStack {
-          Image(systemName: repoIcon)
+          Image(systemName: "desktopcomputer")
             .font(.body)
-            .foregroundStyle(repo.hasUpdate ? .blue : .green)
-          Text(repo.name)
+            .foregroundStyle(updateInfo.hasUpdate ? .blue : .green)
+          Text("Mission Control")
             .font(.subheadline.bold())
           Spacer()
-          if repo.hasUpdate {
-            Text("\(repo.behind) behind")
+          if updateInfo.hasUpdate {
+            Text("\(updateInfo.behind) behind")
               .font(.caption2.bold())
               .padding(.horizontal, 6)
               .padding(.vertical, 2)
               .background(Color.blue.opacity(0.2))
               .foregroundStyle(.blue)
               .clipShape(Capsule())
-          } else if repo.error == nil {
+          } else if updateInfo.error == nil {
             Image(systemName: "checkmark.circle.fill")
               .font(.caption)
               .foregroundStyle(.green)
           }
         }
         
-        if let error = repo.error {
+        if let error = updateInfo.error {
           Text(error)
             .font(.caption)
             .foregroundStyle(.red)
         } else {
-          VStack(alignment: .leading, spacing: 4) {
-            HStack {
-              Text(repo.localCommit)
-                .font(.system(.caption, design: .monospaced))
+          VStack(alignment: .leading, spacing: 8) {
+            // Current version
+            VStack(alignment: .leading, spacing: 4) {
+              Text("Current")
+                .font(.caption2.bold())
                 .foregroundStyle(.secondary)
-              Text(repo.localMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-            
-            if repo.hasUpdate, let remoteMsg = repo.remoteMessage, let remoteCommit = repo.remoteCommit {
               HStack {
-                Image(systemName: "arrow.down")
-                  .font(.caption2)
-                  .foregroundStyle(.blue)
-                Text(remoteCommit)
+                Text(updateInfo.localCommit)
                   .font(.system(.caption, design: .monospaced))
-                  .foregroundStyle(.blue)
-                Text(remoteMsg)
+                  .foregroundStyle(.primary)
+                Text(updateInfo.localMessage)
                   .font(.caption)
-                  .foregroundStyle(.blue)
+                  .foregroundStyle(.secondary)
                   .lineLimit(1)
               }
             }
             
-            Text("branch: \(repo.branch)")
-              .font(.caption2)
-              .foregroundStyle(.tertiary)
+            // Remote version (if different)
+            if updateInfo.hasUpdate, let remoteMsg = updateInfo.remoteMessage, let remoteCommit = updateInfo.remoteCommit {
+              Divider()
+              VStack(alignment: .leading, spacing: 4) {
+                Text("Available")
+                  .font(.caption2.bold())
+                  .foregroundStyle(.blue)
+                HStack {
+                  Text(remoteCommit)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.blue)
+                  Text(remoteMsg)
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                    .lineLimit(1)
+                }
+              }
+            }
+            
+            // Branch info
+            HStack {
+              Image(systemName: "chevron.branch")
+                .font(.caption2)
+              Text(updateInfo.branch)
+                .font(.caption2)
+            }
+            .foregroundStyle(.tertiary)
           }
           
-          if repo.hasUpdate {
+          // Update button
+          if updateInfo.hasUpdate {
             Button {
-              onPull()
+              onUpdate()
             } label: {
               HStack {
-                if isPulling {
+                if isUpdating {
                   ProgressView()
                     .scaleEffect(0.6)
                 } else {
                   Image(systemName: "arrow.down.circle.fill")
                 }
-                Text(pullLabel ?? (isPulling ? "Pulling..." : "Pull Update"))
+                Text(isUpdating ? "Updating..." : "Update & Relaunch")
               }
               .font(.caption.bold())
               .frame(maxWidth: .infinity)
-              .padding(.vertical, 6)
+              .padding(.vertical, 8)
               .background(Color.blue.opacity(0.2))
               .foregroundStyle(.blue)
               .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .disabled(isPulling)
+            .disabled(isUpdating)
           }
         }
       }
-    }
-  }
-  
-  private var repoIcon: String {
-    switch repo.name {
-    case "lobs-server": return "server.rack"
-    case "lobs-mission-control": return "desktopcomputer"
-    case "lobs-mobile": return "iphone"
-    default: return "folder.fill"
     }
   }
 }
@@ -1064,46 +1013,6 @@ private struct SelfUpdateResultBanner: View {
         }
         .buttonStyle(.plain)
       }
-    }
-    .padding(12)
-    .background((result.success ? Color.green : Color.red).opacity(0.1))
-    .clipShape(RoundedRectangle(cornerRadius: 8))
-  }
-}
-
-private struct PullResultBanner: View {
-  let result: UpdatePullResponse
-  
-  var body: some View {
-    HStack(spacing: 8) {
-      Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
-        .foregroundStyle(result.success ? .green : .red)
-      
-      VStack(alignment: .leading, spacing: 2) {
-        Text(result.success ? "Updated \(result.repo)" : "Failed to update \(result.repo)")
-          .font(.caption.bold())
-        
-        if let newCommit = result.newCommit {
-          Text("Now at \(newCommit)")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-        
-        if result.needsRestart {
-          Text("⚠️ Server restart required to apply changes")
-            .font(.caption2)
-            .foregroundStyle(.orange)
-        }
-        
-        if !result.success {
-          Text(result.output)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .lineLimit(3)
-        }
-      }
-      
-      Spacer()
     }
     .padding(12)
     .background((result.success ? Color.green : Color.red).opacity(0.1))

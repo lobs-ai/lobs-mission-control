@@ -739,8 +739,12 @@ private struct DocumentViewer: View {
       .background(ITheme.bg)
     }
     .background(ITheme.bg)
-    .onChange(of: item.id) { _ in
+    .onAppear {
+      vm.ensureInboxThread(docId: item.id)
+    }
+    .onChange(of: item.id) { newId in
       replyText = ""
+      vm.ensureInboxThread(docId: newId)
     }
   }
 }

@@ -1762,28 +1762,46 @@ final class AppViewModel: ObservableObject {
           items[i].isRead = readItemIds.contains(items[i].id)
         }
         
-        // Load threads
+        // Show items immediately, then load threads in background
+        await MainActor.run {
+          self.inboxItems = items
+        }
+        
+        // Load threads concurrently (max 10 at a time to avoid flooding)
         var loadedThreads: [String: InboxThread] = [:]
-        for item in items {
-          if let thread = try? await api.loadInboxThread(docId: item.id) {
-            loadedThreads[item.id] = thread
+        let batchSize = 10
+        for batchStart in stride(from: 0, to: items.count, by: batchSize) {
+          let batchEnd = min(batchStart + batchSize, items.count)
+          let batch = Array(items[batchStart..<batchEnd])
+          
+          await withTaskGroup(of: (String, InboxThread?).self) { group in
+            for item in batch {
+              // Skip if we have a pending local write
+              if pendingThreadWrites[item.id] != nil { continue }
+              group.addTask {
+                let thread = try? await self.api.loadInboxThread(docId: item.id)
+                return (item.id, thread)
+              }
+            }
+            for await (docId, thread) in group {
+              if let thread = thread {
+                loadedThreads[docId] = thread
+              }
+            }
           }
         }
         
-        // Merge back any threads with pending local writes
+        // Merge pending local writes
         for (docId, pendingThread) in pendingThreadWrites {
           if let serverThread = loadedThreads[docId] {
-            // Keep the pending version if it's newer
             if pendingThread.updatedAt >= serverThread.updatedAt {
               loadedThreads[docId] = pendingThread
             } else {
-              // Server version is newer — drop pending
               await MainActor.run {
                 self.pendingThreadWrites.removeValue(forKey: docId)
               }
             }
           } else {
-            // Thread only exists locally
             loadedThreads[docId] = pendingThread
           }
         }
@@ -1799,7 +1817,6 @@ final class AppViewModel: ObservableObject {
         }
         
         await MainActor.run {
-          self.inboxItems = items
           self.inboxThreadsByDocId = loadedThreads
           if didChangeSeen {
             self.lastSeenThreadCounts = updatedSeen
@@ -2113,6 +2130,18 @@ final class AppViewModel: ObservableObject {
     }
   }
 
+  func ensureInboxThread(docId: String) {
+    // Load thread on-demand if not already loaded
+    guard inboxThreadsByDocId[docId] == nil else { return }
+    Task {
+      if let thread = try? await api.loadInboxThread(docId: docId) {
+        await MainActor.run {
+          self.inboxThreadsByDocId[docId] = thread
+        }
+      }
+    }
+  }
+  
   func postInboxThreadMessage(docId: String, author: String, text: String) {
     let now = Date()
     let msg = InboxThreadMessage(
