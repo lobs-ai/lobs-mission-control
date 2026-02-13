@@ -110,7 +110,7 @@ struct CommandCenterView: View {
   }
   
   private var blockedTasksCount: Int {
-    vm.tasks.filter { $0.workState == .blocked }.count
+    vm.tasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count
   }
   
   private var inboxTasksCount: Int {
@@ -635,7 +635,7 @@ private struct DetailedStatsSection: View {
         active: projectTasks.filter { $0.status == .active }.count,
         inbox: projectTasks.filter { $0.status == .inbox }.count,
         completed: projectTasks.filter { $0.status == .completed }.count,
-        blocked: projectTasks.filter { $0.workState == .blocked }.count
+        blocked: projectTasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count
       )
     }
   }
@@ -938,7 +938,7 @@ private struct ProjectCard: View {
   private var activeCount: Int { tasks.filter { $0.status == .active }.count }
   private var completedCount: Int { tasks.filter { $0.status == .completed }.count }
   private var inboxCount: Int { tasks.filter { $0.status == .inbox }.count }
-  private var blockedCount: Int { tasks.filter { $0.workState == .blocked }.count }
+  private var blockedCount: Int { tasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count }
   private var totalCount: Int { tasks.count }
   
   private var lastActivity: Date? {

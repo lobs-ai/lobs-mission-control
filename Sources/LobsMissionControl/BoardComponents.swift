@@ -76,6 +76,7 @@ private struct TextDumpToolbarButton: View {
         }
         .scaleEffect(isHovering ? 1.06 : 1.0)
         .animation(.easeOut(duration: 0.15), value: isHovering)
+        .contentShape(.rect)
     }
     .buttonStyle(.plain)
     .onHover { h in isHovering = h }
@@ -116,6 +117,7 @@ private struct InboxToolbarButton: View {
         }
         .scaleEffect(isHovering ? 1.06 : 1.0)
         .animation(.easeOut(duration: 0.15), value: isHovering)
+        .contentShape(.rect)
     }
     .buttonStyle(.plain)
     .onHover { h in isHovering = h }
@@ -155,6 +157,7 @@ private struct DocumentsToolbarButton: View {
         }
         .scaleEffect(isHovering ? 1.06 : 1.0)
         .animation(.easeOut(duration: 0.15), value: isHovering)
+        .contentShape(.rect)
     }
     .buttonStyle(.plain)
     .onHover { h in isHovering = h }
@@ -394,7 +397,9 @@ private struct StatsBar: View {
   private var doneCount: Int {
     vm.tasks.filter { $0.status == .completed }.count
   }
-  private var blockedCount: Int { vm.tasks.filter { $0.workState == .blocked }.count }
+  private var blockedCount: Int { 
+    vm.tasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count 
+  }
   private var totalCount: Int { vm.tasks.count }
 
   var body: some View {
@@ -765,6 +770,7 @@ private struct BulkActionButton: View {
       .background(isHovering ? color.opacity(0.2) : color.opacity(0.12))
       .foregroundStyle(color)
       .clipShape(RoundedRectangle(cornerRadius: 8))
+      .contentShape(.rect)
     }
     .buttonStyle(.plain)
     .onHover { h in isHovering = h }
@@ -2082,6 +2088,7 @@ private struct ActionButton: View {
       .background(isHovering ? color.opacity(0.18) : color.opacity(0.1))
       .foregroundStyle(color)
       .clipShape(RoundedRectangle(cornerRadius: 8))
+      .contentShape(.rect)
     }
     .buttonStyle(.plain)
     .onHover { h in isHovering = h }

@@ -101,10 +101,11 @@ struct OnboardingPersonalityView: View {
               .foregroundColor(.primary)
               .frame(width: 120)
               .padding(.vertical, 10)
+              .background(Theme.cardBg)
+              .cornerRadius(8)
+              .contentShape(.rect)
           }
           .buttonStyle(.plain)
-          .background(Theme.cardBg)
-          .cornerRadius(8)
           .disabled(isSaving)
           .opacity(isSaving ? 0.5 : 1.0)
         }
@@ -115,10 +116,11 @@ struct OnboardingPersonalityView: View {
             .foregroundColor(.primary)
             .frame(width: 120)
             .padding(.vertical, 10)
+            .background(Theme.cardBg)
+            .cornerRadius(8)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .background(Theme.cardBg)
-        .cornerRadius(8)
         .disabled(isSaving)
         .opacity(isSaving ? 0.5 : 1.0)
         .help("Rebuild the three files from the form values")
@@ -134,10 +136,11 @@ struct OnboardingPersonalityView: View {
           .foregroundColor(.white)
           .frame(width: showBackButton ? 160 : 140)
           .padding(.vertical, 10)
+          .background(Theme.accent)
+          .cornerRadius(8)
+          .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .background(Theme.accent)
-        .cornerRadius(8)
         .disabled(isSaving)
         .opacity(isSaving ? 0.7 : 1.0)
       }

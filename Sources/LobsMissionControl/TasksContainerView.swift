@@ -217,7 +217,7 @@ struct TasksContainerView: View {
                     let projectTasks = vm.tasks.filter { $0.projectId == vm.selectedProjectId }
                     let activeCount = projectTasks.filter { $0.status == .active }.count
                     let inboxCount = projectTasks.filter { $0.status == .inbox }.count
-                    let blockedCount = projectTasks.filter { $0.workState == .blocked }.count
+                    let blockedCount = projectTasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count
                     
                     HStack(spacing: 8) {
                         if inboxCount > 0 {
@@ -252,12 +252,13 @@ struct TasksContainerView: View {
                 Spacer()
                 
                 // Overview stats
-                let totalTasks = vm.tasks.filter { $0.status != .completed && $0.status != .rejected }.count
+                let activeTasks = vm.tasks.filter { $0.status != .completed && $0.status != .rejected }.count
+                let totalTasks = vm.tasks.count
                 let activeProjects = vm.sortedActiveProjects.count
                 
                 HStack(spacing: 12) {
                     OverviewStat(label: "Projects", value: "\(activeProjects)", icon: "folder.fill", color: .blue)
-                    OverviewStat(label: "Active Tasks", value: "\(totalTasks)", icon: "flame.fill", color: .orange)
+                    OverviewStat(label: "Tasks", value: "\(totalTasks) (\(activeTasks) active)", icon: "flame.fill", color: .orange)
                 }
             }
             
@@ -662,7 +663,7 @@ private struct RichProjectCard: View {
     private var activeCount: Int { tasks.filter { $0.status == .active }.count }
     private var inboxCount: Int { tasks.filter { $0.status == .inbox }.count }
     private var completedCount: Int { tasks.filter { $0.status == .completed }.count }
-    private var blockedCount: Int { tasks.filter { $0.workState == .blocked }.count }
+    private var blockedCount: Int { tasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count }
     private var totalCount: Int { tasks.count }
     
     private var completionPercentage: Double {

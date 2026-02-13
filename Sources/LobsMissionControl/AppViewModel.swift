@@ -692,19 +692,10 @@ final class AppViewModel: ObservableObject {
 
   /// Reload without clearing error state if nothing changed.
   func silentReload() {
-    guard let repoURL else { return }
     // Skip if already syncing to avoid stacking requests
     guard !isGitBusy else { return }
     isGitBusy = true
     Task {
-      do {
-        // Run git sync off the main thread to avoid UI lag
-        try await syncRepoAsync(repoURL: repoURL)
-      } catch {
-        await MainActor.run { isGitBusy = false }
-        return
-      }
-
       // Capture main-actor properties before detaching
       let shouldAutoArchiveCompleted = autoArchiveCompleted
       let archiveAfterDays = archiveCompletedAfterDays
@@ -1187,31 +1178,8 @@ final class AppViewModel: ObservableObject {
   }
 
   func reload() {
-    guard let repoURL else {
-      lastError = "Repo path not set"
-      return
-    }
-
-    // If a previous sync crashed mid-rebase, prompt for recovery before doing anything else.
-    promptRebaseRecoveryIfNeeded(context: "startup/reload")
-    if rebaseRecoveryPresented {
-      isGitBusy = false
-      return
-    }
-
     isGitBusy = true
     Task {
-      // Try to sync, but don't fail if it errors - we can still load local data
-      do {
-        // Run git sync off the main thread to avoid UI lag
-        try await syncRepoAsync(repoURL: repoURL)
-      } catch {
-        await MainActor.run {
-          lastError = String(describing: error)
-        }
-        // Continue to load data even if sync failed
-      }
-
       // Capture main-actor properties before detaching
       let shouldAutoArchiveCompleted = autoArchiveCompleted
       let archiveAfterDays = archiveCompletedAfterDays
@@ -2118,7 +2086,8 @@ final class AppViewModel: ObservableObject {
             projectId: task.projectId,
             workState: task.workState,
             reviewState: task.reviewState,
-            notes: task.notes
+            notes: task.notes,
+            agent: task.agent
           )
         }
 
@@ -2585,7 +2554,8 @@ final class AppViewModel: ObservableObject {
           projectId: selectedProjectId,
           workState: .notStarted,
           reviewState: .approved,
-          notes: trimmedNotes
+          notes: trimmedNotes,
+          agent: agent
         )
         await MainActor.run {
           // Update with server response
@@ -2818,8 +2788,6 @@ final class AppViewModel: ObservableObject {
   }
 
   func archiveProject(id: String) {
-    guard id != "default" else { return }
-
     // Local update (optimistic)
     if let idx = projects.firstIndex(where: { $0.id == id }) {
       projects[idx].archived = true

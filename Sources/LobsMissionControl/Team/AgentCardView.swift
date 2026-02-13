@@ -15,7 +15,7 @@ struct AgentCardView: View {
           Text(agent.displayName)
             .font(.headline)
           
-          StatusBadge(status: agent.status)
+          StatusBadge(status: agent.status, lastCompletedAt: agent.lastCompletedAt)
         }
         
         Spacer()
@@ -131,6 +131,15 @@ struct AgentCardView: View {
     case "working": return .blue.opacity(0.3)
     case "thinking": return .purple.opacity(0.3)
     case "error": return .red.opacity(0.3)
+    case "idle": 
+      // Highlight recently active agents
+      if let lastCompleted = agent.lastCompletedAt {
+        let secondsSince = Date().timeIntervalSince(lastCompleted)
+        if secondsSince < 300 { // 5 minutes
+          return .green.opacity(0.2)
+        }
+      }
+      return Color(NSColor.separatorColor)
     default: return Color(NSColor.separatorColor)
     }
   }
@@ -170,6 +179,7 @@ struct AgentCardView: View {
 
 private struct StatusBadge: View {
   let status: String
+  let lastCompletedAt: Date?
   
   var body: some View {
     HStack(spacing: 4) {
@@ -187,8 +197,20 @@ private struct StatusBadge: View {
     .cornerRadius(8)
   }
   
+  private var isRecentlyActive: Bool {
+    guard let lastCompleted = lastCompletedAt else { return false }
+    let now = Date()
+    let secondsSince = now.timeIntervalSince(lastCompleted)
+    // Consider "recently active" if completed a task in the last 5 minutes
+    return secondsSince < 300
+  }
+  
   private var statusText: String {
-    status.capitalized
+    // Show "Recently Active" for idle agents that completed tasks recently
+    if status == "idle" && isRecentlyActive {
+      return "Recently Active"
+    }
+    return status.capitalized
   }
   
   private var statusColor: Color {
@@ -196,6 +218,7 @@ private struct StatusBadge: View {
     case "working": return .blue
     case "thinking": return .purple
     case "error": return .red
+    case "idle" where isRecentlyActive: return .green
     default: return .secondary
     }
   }

@@ -469,7 +469,8 @@ final class APIService {
     projectId: String? = nil,
     workState: WorkState? = .notStarted,
     reviewState: ReviewState? = .pending,
-    notes: String?
+    notes: String?,
+    agent: String? = nil
   ) async throws -> DashboardTask {
     let create = TaskCreateRequest(
       id: id,
@@ -479,7 +480,8 @@ final class APIService {
       workState: workState?.rawValue,
       reviewState: reviewState?.rawValue,
       projectId: projectId,
-      notes: notes
+      notes: notes,
+      agent: agent
     )
     
     return try await request(
@@ -1976,6 +1978,7 @@ private struct TaskCreateRequest: Codable {
   let reviewState: String?
   let projectId: String?
   let notes: String?
+  let agent: String?
   
   enum CodingKeys: String, CodingKey {
     case id
@@ -1986,6 +1989,7 @@ private struct TaskCreateRequest: Codable {
     case reviewState = "review_state"
     case projectId = "project_id"
     case notes
+    case agent
   }
 }
 
