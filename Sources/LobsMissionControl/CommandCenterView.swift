@@ -755,6 +755,7 @@ private struct HomeCardContainer<Content: View>: View {
   
   var body: some View {
     content
+      .frame(minHeight: 220, alignment: .top)
       .padding(20)
       .background(Color(NSColor.windowBackgroundColor))
       .clipShape(RoundedRectangle(cornerRadius: 16))

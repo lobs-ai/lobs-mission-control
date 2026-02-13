@@ -650,6 +650,23 @@ struct ContentView: View {
           },
           onOpenAIUsage: {
             withAnimation(.easeInOut(duration: 0.25)) { showAIUsage = true }
+          },
+          onOpenMemory: {
+            withAnimation(.easeInOut(duration: 0.25)) { showMemory = true }
+          },
+          onOpenChat: {
+            withAnimation(.easeInOut(duration: 0.25)) { showChat = true }
+          },
+          onOpenStatus: {
+            withAnimation(.easeInOut(duration: 0.25)) { showStatus = true }
+          },
+          onOpenSettings: {
+            withAnimation(.easeInOut(duration: 0.25)) { showSettings = true }
+          },
+          onOpenAgentDetail: { agentType in
+            // TODO: implement agent detail view navigation
+            // For now, just open status which shows agent info
+            withAnimation(.easeInOut(duration: 0.25)) { showStatus = true }
           }
         )
         .frame(width: 560, height: 420)

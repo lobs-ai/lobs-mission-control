@@ -11,6 +11,11 @@ struct CommandPaletteView: View {
   var onNewTask: (() -> Void)? = nil
   var onOpenInbox: ((String?) -> Void)? = nil
   var onOpenAIUsage: (() -> Void)? = nil
+  var onOpenMemory: (() -> Void)? = nil
+  var onOpenChat: (() -> Void)? = nil
+  var onOpenStatus: (() -> Void)? = nil
+  var onOpenSettings: (() -> Void)? = nil
+  var onOpenAgentDetail: ((String) -> Void)? = nil
   
   @State private var searchText = ""
   @State private var selectedIndex = 0
@@ -19,18 +24,22 @@ struct CommandPaletteView: View {
   // Recent selections (persisted)
   @AppStorage("commandPaletteRecents") private var recentsData = ""
   
+  // Async memory search
+  @State private var memorySearchResults: [MemorySearchResult] = []
+  @State private var searchTask: Task<Void, Never>? = nil
+  
   private var filterMode: FilterMode {
     if searchText.hasPrefix("#") { return .projects }
     if searchText.hasPrefix("@") { return .tasks }
     if searchText.hasPrefix("/") { return .docs }
     if searchText.hasPrefix("$") { return .inbox }
+    if searchText.hasPrefix("!") { return .memories }
+    if searchText.hasPrefix("&") { return .agents }
+    if searchText.hasPrefix(">") { return .commands }
     return .all
   }
   
   private var queryText: String {
-    if searchText.hasPrefix(">") {
-      return String(searchText.dropFirst()).trimmingCharacters(in: .whitespaces)
-    }
     if filterMode != .all, let first = searchText.first, first != " " {
       return String(searchText.dropFirst()).trimmingCharacters(in: .whitespaces)
     }
@@ -39,6 +48,11 @@ struct CommandPaletteView: View {
   
   private var results: [CommandResult] {
     var items: [CommandResult] = []
+    
+    // Quick actions (always show in all/commands mode, or when empty)
+    if filterMode == .all || filterMode == .commands {
+      items.append(contentsOf: quickActionResults())
+    }
     
     // Home/Overview - always available in all mode
     if filterMode == .all {
@@ -74,6 +88,16 @@ struct CommandPaletteView: View {
       items.append(contentsOf: inboxResults())
     }
     
+    // Memories (from async search)
+    if filterMode == .all || filterMode == .memories {
+      items.append(contentsOf: memoryResults())
+    }
+    
+    // Agents
+    if filterMode == .all || filterMode == .agents {
+      items.append(contentsOf: agentResults())
+    }
+    
     let parsed = PaletteQuery.parse(queryText)
 
     // Optional project filter (e.g. "in:dashboard")
@@ -104,6 +128,9 @@ struct CommandPaletteView: View {
         case .tasks: return recent.id.hasPrefix("task:")
         case .docs: return recent.id.hasPrefix("research:")
         case .inbox: return recent.id.hasPrefix("inbox:")
+        case .memories: return recent.id.hasPrefix("memory:")
+        case .agents: return recent.id.hasPrefix("agent:")
+        case .commands: return recent.id.hasPrefix("action:")
         }
       }
       // Deduplicate by result ID
@@ -161,7 +188,23 @@ struct CommandPaletteView: View {
             .foregroundStyle(.secondary)
           
           if queryText.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
+              Text("Quick actions:")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.tertiary)
+              
+              VStack(alignment: .leading, spacing: 4) {
+                Text("⌘N  New Task")
+                  .font(.system(size: 11))
+                  .foregroundStyle(.secondary)
+                Text("⌘/  Open Chat")
+                  .font(.system(size: 11))
+                  .foregroundStyle(.secondary)
+              }
+              
+              Divider()
+                .padding(.vertical, 4)
+              
               Text("Filter modes:")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.tertiary)
@@ -173,6 +216,13 @@ struct CommandPaletteView: View {
               HStack(spacing: 12) {
                 FilterHint(prefix: "/", label: "Docs")
                 FilterHint(prefix: "$", label: "Inbox")
+              }
+              HStack(spacing: 12) {
+                FilterHint(prefix: "!", label: "Memories")
+                FilterHint(prefix: "&", label: "Agents")
+              }
+              HStack(spacing: 12) {
+                FilterHint(prefix: ">", label: "Commands")
               }
             }
             .padding(.top, 4)
@@ -217,9 +267,47 @@ struct CommandPaletteView: View {
     .onAppear {
       searchFieldFocused = true
     }
-    .onChange(of: searchText) { _ in
+    .onDisappear {
+      // Cancel any pending search tasks
+      searchTask?.cancel()
+      searchTask = nil
+      memorySearchResults = []
+    }
+    .onChange(of: searchText) { newValue in
       // Reset selection when query changes
       selectedIndex = 0
+      
+      // Trigger async memory search (debounced)
+      searchTask?.cancel()
+      
+      let trimmed = queryText.trimmingCharacters(in: .whitespaces)
+      
+      // Only search if we have a query and we're in all or memories mode
+      guard !trimmed.isEmpty, (filterMode == .all || filterMode == .memories) else {
+        memorySearchResults = []
+        return
+      }
+      
+      // Debounce: wait 300ms before searching
+      searchTask = Task {
+        try? await Task.sleep(nanoseconds: 300_000_000) // 300ms
+        
+        guard !Task.isCancelled else { return }
+        
+        do {
+          guard let apiService = vm.apiService else { return }
+          let results = try await apiService.searchMemories(query: trimmed)
+          
+          guard !Task.isCancelled else { return }
+          
+          await MainActor.run {
+            memorySearchResults = results
+          }
+        } catch {
+          // Silently fail — memory search is optional
+          print("Memory search failed: \(error)")
+        }
+      }
     }
     .background(
       KeyEventHandler(
@@ -434,6 +522,93 @@ struct CommandPaletteView: View {
     }
   }
   
+  private func memoryResults() -> [CommandResult] {
+    return memorySearchResults.map { memory in
+      CommandResult(
+        id: "memory:\(memory.id)",
+        icon: "brain.head.profile",
+        title: memory.title,
+        subtitle: memory.snippet.prefix(80) + (memory.snippet.count > 80 ? "..." : ""),
+        category: "Memories",
+        action: {
+          onOpenMemory?()
+        }
+      )
+    }
+  }
+  
+  private func agentResults() -> [CommandResult] {
+    let agents: [(String, String, String)] = [
+      ("programmer", "🛠️", "Code implementation, bug fixes"),
+      ("researcher", "🔬", "Research and investigation"),
+      ("reviewer", "🔍", "Code review and feedback"),
+      ("writer", "✍️", "Documentation and writing"),
+      ("architect", "🏗️", "System design and architecture")
+    ]
+    
+    return agents.map { (type, emoji, desc) in
+      let status = vm.agentStatuses[type]
+      let statusText = status?.status ?? "idle"
+      let activity = status?.activity ?? desc
+      
+      return CommandResult(
+        id: "agent:\(type)",
+        icon: "person.circle",
+        title: "\(emoji) \(type.capitalized)",
+        subtitle: "\(statusText.capitalized) • \(activity)",
+        category: "Agents",
+        action: {
+          onOpenAgentDetail?(type)
+        }
+      )
+    }
+  }
+  
+  private func quickActionResults() -> [CommandResult] {
+    return [
+      CommandResult(
+        id: "action:new-task",
+        icon: "plus.circle.fill",
+        title: "New Task",
+        subtitle: "Create a new task",
+        category: "Actions",
+        action: {
+          onNewTask?()
+        }
+      ),
+      CommandResult(
+        id: "action:open-chat",
+        icon: "message.fill",
+        title: "Open Chat",
+        subtitle: "Chat with Lobs",
+        category: "Actions",
+        action: {
+          onOpenChat?()
+        }
+      ),
+      CommandResult(
+        id: "action:system-status",
+        icon: "chart.bar.fill",
+        title: "System Status",
+        subtitle: "View system overview and activity",
+        category: "Actions",
+        action: {
+          onOpenStatus?()
+        }
+      ),
+      CommandResult(
+        id: "action:settings",
+        icon: "gear",
+        title: "Settings",
+        subtitle: "Open settings",
+        category: "Actions",
+        action: {
+          onOpenSettings?()
+        }
+      )
+    ]
+  }
+  
   // MARK: - Fuzzy Matching & Ranking
 
   private func matchScore(result: CommandResult, queryTokens: [String], recentIds: Set<String>) -> Int? {
@@ -602,6 +777,9 @@ private enum FilterMode {
   case tasks
   case docs
   case inbox
+  case memories
+  case agents
+  case commands
 }
 
 // MARK: - Command Result
