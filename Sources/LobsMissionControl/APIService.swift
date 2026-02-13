@@ -1429,6 +1429,82 @@ final class APIService {
       body: MessageSend(content: content)
     )
   }
+  
+  // MARK: - Memory
+  
+  func fetchMemories(type: String? = nil, limit: Int? = nil) async throws -> [MemoryItem] {
+    var queryItems: [URLQueryItem] = []
+    
+    if let type = type {
+      queryItems.append(URLQueryItem(name: "type", value: type))
+    }
+    if let limit = limit {
+      queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+    } else {
+      queryItems.append(URLQueryItem(name: "limit", value: "1000"))
+    }
+    
+    return try await request(
+      method: "GET",
+      path: "/api/memories",
+      queryItems: queryItems
+    )
+  }
+  
+  func fetchMemory(id: Int) async throws -> MemoryDetail {
+    return try await request(
+      method: "GET",
+      path: "/api/memories/\(id)"
+    )
+  }
+  
+  func updateMemory(id: Int, content: String, title: String?) async throws -> MemoryDetail {
+    struct MemoryUpdate: Codable {
+      let content: String
+      let title: String?
+    }
+    
+    return try await request(
+      method: "PUT",
+      path: "/api/memories/\(id)",
+      body: MemoryUpdate(content: content, title: title)
+    )
+  }
+  
+  func createMemory(title: String, content: String, type: String, date: Date?) async throws -> MemoryDetail {
+    struct MemoryCreate: Codable {
+      let title: String
+      let content: String
+      let type: String
+      let date: Date?
+    }
+    
+    return try await request(
+      method: "POST",
+      path: "/api/memories",
+      body: MemoryCreate(title: title, content: content, type: type, date: date)
+    )
+  }
+  
+  func captureMemory(content: String) async throws -> MemoryDetail {
+    struct CaptureRequest: Codable {
+      let content: String
+    }
+    
+    return try await request(
+      method: "POST",
+      path: "/api/memories/capture",
+      body: CaptureRequest(content: content)
+    )
+  }
+  
+  func searchMemories(query: String) async throws -> [MemorySearchResult] {
+    return try await request(
+      method: "GET",
+      path: "/api/memories/search",
+      queryItems: [URLQueryItem(name: "q", value: query)]
+    )
+  }
 }
 
 // MARK: - Request/Response Models

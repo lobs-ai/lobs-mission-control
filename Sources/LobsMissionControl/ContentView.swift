@@ -54,6 +54,8 @@ struct ContentView: View {
   @State private var inboxInitialItemId: String? = nil
   @State private var showDocuments = false
   @State private var showChat = false
+  @State private var showMemory = false
+  @State private var memoryViewModel: MemoryViewModel?
   @State private var showAllDone = false
   @State private var showAllRejected = false
   @State private var quickAddText = ""
@@ -85,6 +87,7 @@ struct ContentView: View {
           showInbox: $showInbox,
           showDocuments: $showDocuments,
           showChat: $showChat,
+          showMemory: $showMemory,
           showTemplates: $showTemplates,
           showHelp: $showHelp,
           showTextDump: $showTextDump,
@@ -299,17 +302,18 @@ struct ContentView: View {
           }
           .buttonStyle(.plain)
           .help("Keyboard Shortcuts (⌘/)")
-          .opacity(showInbox || showDocuments || showChat || showHelp ? 0 : 0.7)
+          .opacity(showInbox || showDocuments || showChat || showMemory || showHelp ? 0 : 0.7)
           .animation(.easeInOut(duration: 0.15), value: showInbox)
           .animation(.easeInOut(duration: 0.15), value: showDocuments)
           .animation(.easeInOut(duration: 0.15), value: showChat)
+          .animation(.easeInOut(duration: 0.15), value: showMemory)
           .animation(.easeInOut(duration: 0.15), value: showHelp)
         }
         .padding(.trailing, 16)
         .padding(.bottom, 12)
       }
       .zIndex(50)
-      .allowsHitTesting(!showInbox && !showDocuments && !showChat && !showHelp && !showAIUsage)
+      .allowsHitTesting(!showInbox && !showDocuments && !showChat && !showMemory && !showHelp && !showAIUsage)
 
       // Inbox overlay — clicking outside dismisses (Task #479271CB)
       if showInbox {
@@ -369,6 +373,24 @@ struct ContentView: View {
               chatVM.connect(serverURL: serverURL)
             }
           }
+      }
+      
+      // Memory overlay — clicking outside dismisses
+      if showMemory, let memoryVM = memoryViewModel {
+        Color.black.opacity(0.3)
+          .ignoresSafeArea()
+          .onTapGesture { withAnimation(.easeInOut(duration: 0.25)) { showMemory = false } }
+          .transition(.opacity)
+          .zIndex(206)
+
+        MemoryView(viewModel: memoryVM)
+          .frame(minWidth: 1000, idealWidth: 1200, minHeight: 700, idealHeight: 800)
+          .clipShape(RoundedRectangle(cornerRadius: 16))
+          .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
+          .padding(40)
+          .onExitCommand { withAnimation(.easeInOut(duration: 0.25)) { showMemory = false } }
+          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+          .zIndex(207)
       }
 
       // AI Usage overlay — clicking outside dismisses (Task #2EB50767)
@@ -508,6 +530,11 @@ struct ContentView: View {
         chatViewModel = ChatViewModel(chatService: chatService, apiService: vm.api)
       }
       
+      // Initialize memory view model
+      if memoryViewModel == nil {
+        memoryViewModel = MemoryViewModel(apiService: vm.api)
+      }
+      
       // Check if onboarding is needed on first launch
       if vm.needsOnboarding {
         showOnboarding = true
@@ -561,6 +588,7 @@ struct ContentView: View {
           if showCommandPalette { withAnimation(.easeInOut(duration: 0.25)) { showCommandPalette = false }; return true }
           if showAIUsage { withAnimation(.easeInOut(duration: 0.25)) { showAIUsage = false }; return true }
           if showInbox { withAnimation(.easeInOut(duration: 0.25)) { showInbox = false }; return true }
+          if showMemory { withAnimation(.easeInOut(duration: 0.25)) { showMemory = false }; return true }
           if showSettings { showSettings = false; return true }
           if showHelp { withAnimation(.easeInOut(duration: 0.25)) { showHelp = false }; return true }
           if vm.popoverTaskId != nil { vm.popoverTaskId = nil; return true }
@@ -944,6 +972,7 @@ private struct ToolbarArea: View {
   @Binding var showInbox: Bool
   @Binding var showDocuments: Bool
   @Binding var showChat: Bool
+  @Binding var showMemory: Bool
   @Binding var showTemplates: Bool
   @Binding var showHelp: Bool
   @Binding var showTextDump: Bool
@@ -1409,6 +1438,19 @@ private struct ToolbarArea: View {
       }
       .buttonStyle(.plain)
       .help("Chat with Lobs")
+      
+      // Memory button
+      Button {
+        withAnimation(.easeInOut(duration: 0.25)) { showMemory = true }
+      } label: {
+        Image(systemName: "brain.head.profile")
+          .font(.body)
+          .padding(6)
+          .background(Theme.subtle)
+          .clipShape(RoundedRectangle(cornerRadius: 8))
+      }
+      .buttonStyle(.plain)
+      .help("Memory")
 
       // Templates button
       if !vm.templates.isEmpty {
