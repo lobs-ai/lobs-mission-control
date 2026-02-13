@@ -10,6 +10,7 @@ struct CommandCenterView: View {
   var onOpenInbox: ((String?) -> Void)? = nil
   var onOpenMemory: (() -> Void)? = nil
   var onOpenStatus: (() -> Void)? = nil
+  var onOpenTeam: (() -> Void)? = nil
   var onStartResearch: (() -> Void)? = nil
   var onOpenChat: (() -> Void)? = nil
   
@@ -67,6 +68,19 @@ struct CommandCenterView: View {
     let orchestratorStatus = vm.workerStatus != nil ? "running" : "unknown"
     let activeWorkers = (vm.workerStatus?.active == true) ? 1 : 0
     return (serverStatus, orchestratorStatus, activeWorkers)
+  }
+  
+  // Active agents count
+  private var activeAgentsCount: Int {
+    vm.agentStatuses.values.filter { $0.status == "working" || $0.status == "thinking" }.count
+  }
+  
+  // List of working agents
+  private var workingAgents: [String] {
+    vm.agentStatuses.values
+      .filter { $0.status == "working" || $0.status == "thinking" }
+      .map { $0.agentType }
+      .sorted()
   }
   
   var body: some View {
@@ -172,6 +186,13 @@ struct CommandCenterView: View {
           SystemHealthCard(
             health: systemHealth,
             onViewDetails: { onOpenStatus?() }
+          )
+          
+          // Team
+          TeamCard(
+            activeAgents: activeAgentsCount,
+            workingAgents: workingAgents,
+            onViewDetails: { onOpenTeam?() }
           )
           
           // Recent Memories
@@ -659,6 +680,103 @@ private struct StatusDot: View {
     case "degraded", "warning": return .orange
     case "down", "stopped": return .red
     default: return .gray
+    }
+  }
+}
+
+// MARK: - Team Card
+
+private struct TeamCard: View {
+  let activeAgents: Int
+  let workingAgents: [String]
+  let onViewDetails: () -> Void
+  
+  var body: some View {
+    HomeCardContainer {
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Image(systemName: "person.3.fill")
+            .font(.title3)
+            .foregroundStyle(.blue)
+          Text("Team")
+            .font(.headline)
+          
+          Spacer()
+          
+          if activeAgents > 0 {
+            Text("\(activeAgents)")
+              .font(.title2.bold())
+              .foregroundStyle(.blue)
+          }
+        }
+        
+        if workingAgents.isEmpty {
+          VStack(spacing: 8) {
+            Image(systemName: "zzz")
+              .font(.largeTitle)
+              .foregroundStyle(.secondary)
+            Text("All agents idle")
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+          }
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 20)
+        } else {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Working Now")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .textCase(.uppercase)
+            
+            ForEach(workingAgents.prefix(3), id: \.self) { agentType in
+              HStack(spacing: 8) {
+                Text(agentEmoji(agentType))
+                  .font(.caption)
+                
+                Text(agentType.capitalized)
+                  .font(.subheadline)
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                  Circle()
+                    .fill(.blue)
+                    .frame(width: 6, height: 6)
+                  Text("Active")
+                    .font(.caption2)
+                    .foregroundStyle(.blue)
+                }
+              }
+            }
+          }
+        }
+        
+        Divider()
+        Button {
+          onViewDetails()
+        } label: {
+          HStack {
+            Text("View team")
+              .font(.caption.bold())
+            Spacer()
+            Image(systemName: "arrow.right")
+              .font(.caption)
+          }
+          .foregroundStyle(.blue)
+        }
+        .buttonStyle(.plain)
+      }
+    }
+  }
+  
+  private func agentEmoji(_ type: String) -> String {
+    switch type {
+    case "programmer": return "🛠️"
+    case "researcher": return "🔬"
+    case "writer": return "✍️"
+    case "reviewer": return "👁️"
+    case "architect": return "🏗️"
+    default: return "🤖"
     }
   }
 }

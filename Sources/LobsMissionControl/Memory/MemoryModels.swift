@@ -1,6 +1,10 @@
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 
 // MARK: - Memory Item
+// Note: APIService decoder uses .convertFromSnakeCase — no manual CodingKeys needed
 
 struct MemoryItem: Codable, Identifiable {
     let id: Int
@@ -11,31 +15,29 @@ struct MemoryItem: Codable, Identifiable {
     let date: Date?
     let updatedAt: Date
     
-    enum CodingKeys: String, CodingKey {
-        case id
-        case path
-        case agent
-        case title
-        case memoryType = "memory_type"
-        case date
-        case updatedAt = "updated_at"
-    }
-    
-    var typeBadgeColor: NSColor {
-        switch memoryType {
-        case "long_term": return .systemPurple
-        case "daily": return .systemBlue
-        case "custom": return .systemGreen
-        default: return .systemGray
-        }
-    }
-    
     var typeBadgeIcon: String {
         switch memoryType {
         case "long_term": return "brain.head.profile"
         case "daily": return "calendar"
         case "custom": return "doc.text"
         default: return "doc"
+        }
+    }
+    
+    var displayTitle: String {
+        if memoryType == "long_term" {
+            return "🧠 \(title)"
+        }
+        return title
+    }
+
+    #if os(macOS)
+    var typeBadgeColor: NSColor {
+        switch memoryType {
+        case "long_term": return .systemPurple
+        case "daily": return .systemBlue
+        case "custom": return .systemGreen
+        default: return .systemGray
         }
     }
     
@@ -50,13 +52,7 @@ struct MemoryItem: Codable, Identifiable {
         default: return .systemGray
         }
     }
-    
-    var displayTitle: String {
-        if memoryType == "long_term" {
-            return "🧠 \(title)"
-        }
-        return title
-    }
+    #endif
 }
 
 // MARK: - Memory Detail
@@ -71,18 +67,6 @@ struct MemoryDetail: Codable, Identifiable {
     let date: Date?
     let createdAt: Date
     let updatedAt: Date
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case path
-        case agent
-        case title
-        case content
-        case memoryType = "memory_type"
-        case date
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
 }
 
 // MARK: - Memory Search Result
@@ -96,17 +80,6 @@ struct MemorySearchResult: Codable, Identifiable {
     let memoryType: String
     let date: Date?
     let score: Double?
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case path
-        case agent
-        case title
-        case snippet
-        case memoryType = "memory_type"
-        case date
-        case score
-    }
 }
 
 // MARK: - Agent Memory Info
@@ -117,12 +90,6 @@ struct AgentMemoryInfo: Codable, Identifiable {
     let lastUpdated: String?
     
     var id: String { agent }
-    
-    enum CodingKeys: String, CodingKey {
-        case agent
-        case memoryCount = "memory_count"
-        case lastUpdated = "last_updated"
-    }
 }
 
 // MARK: - Sync Result
@@ -133,9 +100,3 @@ struct SyncResult: Codable {
     let unchanged: Int
     let errors: [String]
 }
-
-#if os(macOS)
-import AppKit
-#else
-import UIKit
-#endif

@@ -1030,3 +1030,53 @@ struct NotificationPreferences: Codable {
 }
 
 extension NotificationType: CaseIterable {}
+
+// MARK: - Calendar Events
+
+struct ScheduledEvent: Codable, Identifiable {
+  var id: String
+  var title: String
+  var description: String?
+  var eventType: String? // e.g., "reminder", "task", "meeting"
+  var scheduledAt: Date
+  var endAt: Date?
+  var allDay: Bool?
+  var recurrenceRule: String?
+  var targetType: String? // e.g., "task", "project"
+  var targetAgent: String?
+  var status: String? // e.g., "pending", "completed", "cancelled"
+  var createdAt: Date?
+  var updatedAt: Date?
+  
+  var displayType: String {
+    eventType?.capitalized ?? "Event"
+  }
+  
+  var isUpcoming: Bool {
+    scheduledAt > Date()
+  }
+  
+  var isPast: Bool {
+    scheduledAt < Date()
+  }
+  
+  var timeUntil: String {
+    let now = Date()
+    let diff = scheduledAt.timeIntervalSince(now)
+    
+    if diff < 0 {
+      return "Past"
+    } else if diff < 60 {
+      return "Now"
+    } else if diff < 3600 {
+      let mins = Int(diff / 60)
+      return "in \(mins)m"
+    } else if diff < 86400 {
+      let hours = Int(diff / 3600)
+      return "in \(hours)h"
+    } else {
+      let days = Int(diff / 86400)
+      return "in \(days)d"
+    }
+  }
+}

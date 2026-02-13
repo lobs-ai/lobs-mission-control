@@ -56,6 +56,7 @@ struct ContentView: View {
   @State private var showChat = false
   @State private var showMemory = false
   @State private var showStatus = false
+  @State private var showTeam = false
   @State private var memoryViewModel: MemoryViewModel?
   @State private var showAllDone = false
   @State private var showAllRejected = false
@@ -124,9 +125,7 @@ struct ContentView: View {
           openInbox: { withAnimation(.easeInOut(duration: 0.25)) { showInbox = true } }
         )
       }
-      .sheet(isPresented: $vm.syncConflictDetailsPresented) {
-        SyncConflictDetailsView(vm: vm)
-      }
+      // Removed: .sheet(isPresented: $vm.syncConflictDetailsPresented)
       .confirmationDialog(
         "A previous sync was interrupted. How do you want to proceed?",
         isPresented: $vm.rebaseRecoveryPresented,
@@ -206,6 +205,7 @@ struct ContentView: View {
             if showInbox { withAnimation(.easeInOut(duration: 0.25)) { showInbox = false }; return true }
             if showMemory { withAnimation(.easeInOut(duration: 0.25)) { showMemory = false }; return true }
             if showStatus { withAnimation(.easeInOut(duration: 0.25)) { showStatus = false }; return true }
+            if showTeam { withAnimation(.easeInOut(duration: 0.25)) { showTeam = false }; return true }
             if showSettings { showSettings = false; return true }
             if showHelp { withAnimation(.easeInOut(duration: 0.25)) { showHelp = false }; return true }
             if vm.popoverTaskId != nil { vm.popoverTaskId = nil; return true }
@@ -320,6 +320,9 @@ struct ContentView: View {
               },
               onOpenStatus: {
                 withAnimation(.easeInOut(duration: 0.25)) { showStatus = true }
+              },
+              onOpenTeam: {
+                withAnimation(.easeInOut(duration: 0.25)) { showTeam = true }
               },
               onStartResearch: {
                 // Find first research project or create one
@@ -504,19 +507,20 @@ struct ContentView: View {
           }
           .buttonStyle(.plain)
           .help("Keyboard Shortcuts (⌘/)")
-          .opacity(showInbox || showDocuments || showChat || showMemory || showStatus || showHelp ? 0 : 0.7)
+          .opacity(showInbox || showDocuments || showChat || showMemory || showStatus || showTeam || showHelp ? 0 : 0.7)
           .animation(.easeInOut(duration: 0.15), value: showInbox)
           .animation(.easeInOut(duration: 0.15), value: showDocuments)
           .animation(.easeInOut(duration: 0.15), value: showChat)
           .animation(.easeInOut(duration: 0.15), value: showMemory)
           .animation(.easeInOut(duration: 0.15), value: showStatus)
+          .animation(.easeInOut(duration: 0.15), value: showTeam)
           .animation(.easeInOut(duration: 0.15), value: showHelp)
         }
         .padding(.trailing, 16)
         .padding(.bottom, 12)
       }
       .zIndex(50)
-      .allowsHitTesting(!showInbox && !showDocuments && !showChat && !showMemory && !showStatus && !showHelp && !showAIUsage)
+      .allowsHitTesting(!showInbox && !showDocuments && !showChat && !showMemory && !showStatus && !showTeam && !showHelp && !showAIUsage)
 
       // Inbox overlay — clicking outside dismisses (Task #479271CB)
       if showInbox {
@@ -614,6 +618,24 @@ struct ContentView: View {
           .zIndex(209)
       }
 
+      // Team overlay — clicking outside dismisses
+      if showTeam {
+        Color.black.opacity(0.3)
+          .ignoresSafeArea()
+          .onTapGesture { withAnimation(.easeInOut(duration: 0.25)) { showTeam = false } }
+          .transition(.opacity)
+          .zIndex(210)
+
+        TeamView(apiService: vm.api)
+          .frame(minWidth: 1000, idealWidth: 1200, minHeight: 700, idealHeight: 800)
+          .clipShape(RoundedRectangle(cornerRadius: 16))
+          .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
+          .padding(40)
+          .onExitCommand { withAnimation(.easeInOut(duration: 0.25)) { showTeam = false } }
+          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+          .zIndex(211)
+      }
+
       // AI Usage overlay — clicking outside dismisses (Task #2EB50767)
       if showAIUsage {
         Color.black.opacity(0.3)
@@ -659,6 +681,9 @@ struct ContentView: View {
           },
           onOpenStatus: {
             withAnimation(.easeInOut(duration: 0.25)) { showStatus = true }
+          },
+          onOpenTeam: {
+            withAnimation(.easeInOut(duration: 0.25)) { showTeam = true }
           },
           onOpenSettings: {
             withAnimation(.easeInOut(duration: 0.25)) { showSettings = true }
@@ -1929,12 +1954,8 @@ private struct SettingsPopover: View {
       }
 
       // Sync
-      GroupBox {
+      GroupBox(label: Label("Sync", systemImage: "arrow.triangle.2.circlepath")) {
         VStack(alignment: .leading, spacing: 8) {
-          Label("Sync", systemImage: "arrow.triangle.2.circlepath")
-            .font(.callout)
-            .fontWeight(.semibold)
-
           Toggle("Auto-push on changes", isOn: $autoPush)
             .toggleStyle(.switch)
             .controlSize(.small)
@@ -1998,7 +2019,8 @@ private struct SettingsPopover: View {
               titleVisibility: .visible
             ) {
               Button("Force Pull", role: .destructive) {
-                vm.forcePullDiscardLocal()
+                // TODO: Re-implement force pull if needed
+                // vm.forcePullDiscardLocal()
               }
               Button("Cancel", role: .cancel) {}
             } message: {
@@ -2018,7 +2040,8 @@ private struct SettingsPopover: View {
               titleVisibility: .visible
             ) {
               Button("Force Push", role: .destructive) {
-                vm.forcePushOverwriteRemote()
+                // TODO: Re-implement force push if needed
+                // vm.forcePushOverwriteRemote()
               }
               Button("Cancel", role: .cancel) {}
             } message: {
@@ -2030,7 +2053,8 @@ private struct SettingsPopover: View {
               titleVisibility: .visible
             ) {
               Button("Push --force", role: .destructive) {
-                vm.forcePushOverwriteRemoteForce()
+                // TODO: Re-implement force push if needed
+                // vm.forcePushOverwriteRemoteForce()
               }
               Button("Cancel", role: .cancel) {}
             } message: {

@@ -14,6 +14,7 @@ struct CommandPaletteView: View {
   var onOpenMemory: (() -> Void)? = nil
   var onOpenChat: (() -> Void)? = nil
   var onOpenStatus: (() -> Void)? = nil
+  var onOpenTeam: (() -> Void)? = nil
   var onOpenSettings: (() -> Void)? = nil
   var onOpenAgentDetail: ((String) -> Void)? = nil
   
@@ -594,6 +595,16 @@ struct CommandPaletteView: View {
         category: "Actions",
         action: {
           onOpenStatus?()
+        }
+      ),
+      CommandResult(
+        id: "action:team",
+        icon: "person.3.fill",
+        title: "Team",
+        subtitle: "View agent status and worker activity",
+        category: "Actions",
+        action: {
+          onOpenTeam?()
         }
       ),
       CommandResult(

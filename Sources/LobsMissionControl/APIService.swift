@@ -664,6 +664,16 @@ final class APIService {
     return dict
   }
   
+  // MARK: - Calendar
+  
+  func fetchUpcomingEvents(limit: Int = 10) async throws -> [ScheduledEvent] {
+    return try await request(
+      method: "GET",
+      path: "/api/calendar/upcoming",
+      queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+    )
+  }
+  
   // MARK: - Templates
   
   func loadTemplates() async throws -> [TaskTemplate] {
