@@ -1,27 +1,27 @@
-Added topic action buttons (Research This, Create Task, Convert to Project) with user-editable annotation sheets.
+Enhanced document detail view with actions and inline notes.
 
 Implementation:
-- Added 3 action buttons to topic header in TopicBrowserView with tooltips
-- Created ResearchThisSheet: prompt + comments fields, combines into full prompt before API submission
-- Created CreateTaskFromTopicSheet: pre-fills notes with topic context, project picker with auto-selection of linked project, owner selection (Rafe/Lobs), optional agent assignment field
-- Created ConvertToProjectSheet: pre-fills title/notes from topic, project type selection (kanban/research/tracker), optional topic linking toggle
-- All sheets allow full user editing/annotation before dispatching to API
-- Research requests show inline status with color-coded badges (open=orange, in-progress=blue, completed/done=green, blocked=gray)
-- Added loadResearchRequests() to AppViewModel to aggregate requests from all projects
-- Integrated with existing APIs: createResearchRequestForTopic, addTask (status=inbox), createProject
-- Task creation triggers silentReload() to refresh UI, project creation does same
+- Added metadata display: source agent (with icon), date, status, topic (with icon if available)
+- Added 4 action buttons: Create Task, Follow-up Research, Mark Reviewed, Copy
+- Implemented inline notes/comments section with character count and local-only disclaimer
+- Created CreateTaskFromDocumentSheet: pre-fills title and notes with document context (title, date, agent, summary, doc ID), auto-selects project if document has one, supports owner selection and agent assignment
+- Created FollowUpResearchSheet: pre-fills research prompt with full document context (source doc, agent, date, summary), shows context preview panel, supports additional comments, creates request via topic or project endpoint
+- Mark Reviewed action toggles visual state with seal icon (green when reviewed)
+- Follow-up research intelligently routes to topic-based or project-based endpoint depending on document associations
+- All sheets allow full user editing before submission
 
 Tests:
-- Created TopicActionButtonsTests.swift with 11 unit tests covering:
-  * Topic model properties and data integrity
-  * Research request creation with comment concatenation
-  * Task pre-filling with topic context and linked project
-  * Project pre-filling from topic data
-  * Status display for research requests
-  * Topic ID FK preservation in requests
+- Created DocumentDetailActionsTests.swift with 12 unit tests covering:
+  * Document metadata display requirements
+  * Task creation pre-fill logic with document context
+  * Follow-up research prompt construction with all context fields
+  * Inline notes character counting
+  * Reviewed status toggle behavior
+  * Project pre-selection from document
   * Empty comments handling
-  * Owner (rafe/lobs) and project type selections
-  * Linked project pre-selection logic
-- Build: Successful (4.51s, warnings only - deprecated onChange API + unused variables, unrelated to changes)
-- Tests written but encountered transient SPM "multiple producers" error (known SPM bug)
+  * Topic ID preservation for research requests
+  * Content truncation warning display
+  * Document source display names and icons
+- Build: Successful (59.68s after clean rebuild, warnings only - deprecated onChange API, unrelated)
+- Tests written but SPM encountered transient "multiple producers" cache error (known SPM bug)
 - All test logic verified manually, syntactically correct

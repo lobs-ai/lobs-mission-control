@@ -748,6 +748,10 @@ private struct DocumentDetailView: View {
   let onBack: () -> Void
   
   @State private var showCopiedAlert = false
+  @State private var showCreateTaskSheet = false
+  @State private var showFollowUpResearchSheet = false
+  @State private var userNotes: String = ""
+  @State private var isReviewed: Bool = false
   
   var body: some View {
     VStack(spacing: 0) {
@@ -804,39 +808,132 @@ private struct DocumentDetailView: View {
           }
           
           // Metadata
-          HStack(spacing: 12) {
-            Label(doc.source.displayName, systemImage: doc.source.icon)
-              .font(.system(size: 12))
-              .foregroundStyle(doc.source == .writer ? .blue : .purple)
-            
-            if let status = doc.status {
-              Label(status.displayName, systemImage: "flag.fill")
+          VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+              Label(doc.source.displayName, systemImage: doc.source.icon)
                 .font(.system(size: 12))
-                .foregroundStyle(statusColor(status))
+                .foregroundStyle(doc.source == .writer ? .blue : .purple)
+              
+              if let status = doc.status {
+                Label(status.displayName, systemImage: "flag.fill")
+                  .font(.system(size: 12))
+                  .foregroundStyle(statusColor(status))
+              }
+              
+              Spacer()
+              
+              HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                Text(doc.date, style: .date)
+              }
+              .font(.system(size: 12))
+              .foregroundStyle(.secondary)
             }
             
-            Spacer()
-            
-            HStack(spacing: 4) {
-              Image(systemName: "calendar")
-              Text(doc.date, style: .date)
+            // Topic if available
+            if let topicId = doc.topicId, let topic = vm.topics.first(where: { $0.id == topicId }) {
+              HStack(spacing: 6) {
+                Image(systemName: "folder.fill")
+                  .font(.system(size: 11))
+                if let icon = topic.icon, !icon.isEmpty {
+                  Text(icon)
+                    .font(.system(size: 11))
+                }
+                Text("Topic: \(topic.title)")
+                  .font(.system(size: 12))
+              }
+              .foregroundStyle(.secondary)
             }
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
           }
           
           // Action buttons
-          HStack(spacing: 8) {
-            Button {
-              copyToClipboard()
-            } label: {
-              HStack(spacing: 4) {
-                Image(systemName: showCopiedAlert ? "checkmark" : "doc.on.clipboard")
-                Text(showCopiedAlert ? "Copied!" : "Copy")
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Actions")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(.secondary)
+            
+            HStack(spacing: 8) {
+              Button {
+                showCreateTaskSheet = true
+              } label: {
+                HStack(spacing: 4) {
+                  Image(systemName: "checklist")
+                  Text("Create Task")
+                }
+                .font(.system(size: 12))
               }
-              .font(.system(size: 12))
+              .buttonStyle(.bordered)
+              
+              Button {
+                showFollowUpResearchSheet = true
+              } label: {
+                HStack(spacing: 4) {
+                  Image(systemName: "arrow.up.doc")
+                  Text("Follow-up Research")
+                }
+                .font(.system(size: 12))
+              }
+              .buttonStyle(.bordered)
+              
+              Button {
+                isReviewed.toggle()
+              } label: {
+                HStack(spacing: 4) {
+                  Image(systemName: isReviewed ? "checkmark.seal.fill" : "checkmark.seal")
+                  Text(isReviewed ? "Reviewed" : "Mark Reviewed")
+                }
+                .font(.system(size: 12))
+              }
+              .buttonStyle(.bordered)
+              .tint(isReviewed ? .green : .blue)
+              
+              Button {
+                copyToClipboard()
+              } label: {
+                HStack(spacing: 4) {
+                  Image(systemName: showCopiedAlert ? "checkmark" : "doc.on.clipboard")
+                  Text(showCopiedAlert ? "Copied!" : "Copy")
+                }
+                .font(.system(size: 12))
+              }
+              .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
+          }
+          
+          Divider()
+          
+          // Inline Notes/Comments
+          VStack(alignment: .leading, spacing: 8) {
+            HStack {
+              Text("Your Notes")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+              
+              Spacer()
+              
+              if !userNotes.isEmpty {
+                Text("\(userNotes.count) characters")
+                  .font(.system(size: 11))
+                  .foregroundStyle(.tertiary)
+              }
+            }
+            
+            TextEditor(text: $userNotes)
+              .font(.system(size: 13))
+              .frame(height: 80)
+              .padding(8)
+              .background(Color(NSColor.textBackgroundColor))
+              .cornerRadius(6)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+              )
+            
+            if !userNotes.isEmpty {
+              Text("Notes are saved locally and won't be synced to the server")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            }
           }
           
           Divider()
@@ -859,6 +956,12 @@ private struct DocumentDetailView: View {
         }
         .padding()
       }
+    }
+    .sheet(isPresented: $showCreateTaskSheet) {
+      CreateTaskFromDocumentSheet(doc: doc, vm: vm, isPresented: $showCreateTaskSheet)
+    }
+    .sheet(isPresented: $showFollowUpResearchSheet) {
+      FollowUpResearchSheet(doc: doc, vm: vm, isPresented: $showFollowUpResearchSheet)
     }
   }
   
@@ -1701,6 +1804,466 @@ private struct ConvertToProjectSheet: View {
         await MainActor.run {
           vm.flashSuccess("Project created: \(title)")
           vm.silentReload()
+          isPresented = false
+        }
+      } catch {
+        await MainActor.run {
+          errorMessage = error.localizedDescription
+          isSaving = false
+        }
+      }
+    }
+  }
+}
+
+// MARK: - Create Task From Document Sheet
+
+private struct CreateTaskFromDocumentSheet: View {
+  let doc: AgentDocument
+  @ObservedObject var vm: AppViewModel
+  @Binding var isPresented: Bool
+  
+  @State private var title: String = ""
+  @State private var notes: String = ""
+  @State private var selectedProjectId: String?
+  @State private var owner: TaskOwner = .rafe
+  @State private var assignedAgent: String?
+  @State private var isSaving: Bool = false
+  @State private var errorMessage: String?
+  
+  var body: some View {
+    VStack(spacing: 0) {
+      // Header
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Create Task from Document")
+            .font(.title3)
+            .fontWeight(.bold)
+          Text("Source: \(doc.title)")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        
+        Spacer()
+        
+        Button {
+          isPresented = false
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title2)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding()
+      
+      Divider()
+      
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Task Title")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            TextField("Enter task title", text: $title)
+              .textFieldStyle(.roundedBorder)
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Notes")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Text("Pre-filled with document context. Edit as needed.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            TextEditor(text: $notes)
+              .font(.system(size: 13))
+              .frame(height: 150)
+              .padding(8)
+              .background(Color(NSColor.textBackgroundColor))
+              .cornerRadius(6)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+              )
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Project (Optional)")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Picker("Select project", selection: $selectedProjectId) {
+              Text("No Project").tag(nil as String?)
+              ForEach(vm.projects) { project in
+                Text(project.title).tag(project.id as String?)
+              }
+            }
+            .pickerStyle(.menu)
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Owner")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Picker("Task owner", selection: $owner) {
+              Text("Me (Rafe)").tag(TaskOwner.rafe)
+              Text("AI (Lobs)").tag(TaskOwner.lobs)
+            }
+            .pickerStyle(.segmented)
+          }
+          
+          if owner == .lobs {
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Assigned Agent")
+                .font(.subheadline)
+                .fontWeight(.medium)
+              TextField("Agent name (e.g., programmer, researcher)", text: Binding(
+                get: { assignedAgent ?? "" },
+                set: { assignedAgent = $0.isEmpty ? nil : $0 }
+              ))
+              .textFieldStyle(.roundedBorder)
+            }
+          }
+          
+          if let error = errorMessage {
+            HStack(spacing: 8) {
+              Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+              Text(error)
+                .font(.subheadline)
+                .foregroundStyle(.red)
+            }
+            .padding()
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(8)
+          }
+        }
+        .padding()
+      }
+      
+      Divider()
+      
+      HStack {
+        Button("Cancel") {
+          isPresented = false
+        }
+        .keyboardShortcut(.cancelAction)
+        
+        Spacer()
+        
+        Button {
+          saveTask()
+        } label: {
+          if isSaving {
+            ProgressView()
+              .scaleEffect(0.7)
+          } else {
+            HStack(spacing: 4) {
+              Image(systemName: "checklist")
+              Text("Create Task")
+            }
+          }
+        }
+        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+        .keyboardShortcut(.defaultAction)
+      }
+      .padding()
+    }
+    .frame(width: 550, height: 650)
+    .background(Theme.bg)
+    .onAppear {
+      initializeDefaults()
+    }
+  }
+  
+  private func initializeDefaults() {
+    // Pre-fill title from document
+    title = "Task from: \(doc.title)"
+    
+    // Pre-fill notes with document context
+    var contextNotes = "**Source Document:** \(doc.title)\n"
+    contextNotes += "**Date:** \(doc.date.formatted(date: .abbreviated, time: .omitted))\n"
+    contextNotes += "**Agent:** \(doc.source.displayName)\n\n"
+    
+    if let summary = doc.summary, !summary.isEmpty {
+      contextNotes += "**Summary:**\n\(summary)\n\n"
+    }
+    
+    contextNotes += "**Document ID:** \(doc.id)\n\n"
+    contextNotes += "---\n\n"
+    contextNotes += "*Add task details here*"
+    
+    notes = contextNotes
+    
+    // Pre-select project if document has one
+    if let projectId = doc.projectId {
+      selectedProjectId = projectId
+    }
+  }
+  
+  private func saveTask() {
+    isSaving = true
+    errorMessage = nil
+    
+    Task {
+      do {
+        _ = try await vm.api.addTask(
+          title: title,
+          owner: owner,
+          status: .inbox,
+          projectId: selectedProjectId,
+          notes: notes,
+          agent: assignedAgent
+        )
+        
+        await MainActor.run {
+          vm.flashSuccess("Task created: \(title)")
+          vm.silentReload()
+          isPresented = false
+        }
+      } catch {
+        await MainActor.run {
+          errorMessage = error.localizedDescription
+          isSaving = false
+        }
+      }
+    }
+  }
+}
+
+// MARK: - Follow-up Research Sheet
+
+private struct FollowUpResearchSheet: View {
+  let doc: AgentDocument
+  @ObservedObject var vm: AppViewModel
+  @Binding var isPresented: Bool
+  
+  @State private var prompt: String = ""
+  @State private var comments: String = ""
+  @State private var isSaving: Bool = false
+  @State private var errorMessage: String?
+  
+  var body: some View {
+    VStack(spacing: 0) {
+      // Header
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Request Follow-up Research")
+            .font(.title3)
+            .fontWeight(.bold)
+          Text("Based on: \(doc.title)")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        
+        Spacer()
+        
+        Button {
+          isPresented = false
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.title2)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+      .padding()
+      
+      Divider()
+      
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Research Question")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Text("What follow-up research is needed based on this document?")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            TextEditor(text: $prompt)
+              .font(.system(size: 13))
+              .frame(height: 120)
+              .padding(8)
+              .background(Color(NSColor.textBackgroundColor))
+              .cornerRadius(6)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+              )
+          }
+          
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Additional Context (Optional)")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            Text("Add any specific focus areas or constraints")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            TextEditor(text: $comments)
+              .font(.system(size: 13))
+              .frame(height: 80)
+              .padding(8)
+              .background(Color(NSColor.textBackgroundColor))
+              .cornerRadius(6)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+              )
+          }
+          
+          // Document context preview
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Document Context (Auto-included)")
+              .font(.subheadline)
+              .fontWeight(.medium)
+            
+            VStack(alignment: .leading, spacing: 4) {
+              HStack {
+                Text("Source:")
+                  .fontWeight(.medium)
+                Text(doc.title)
+              }
+              .font(.system(size: 12))
+              
+              HStack {
+                Text("Agent:")
+                  .fontWeight(.medium)
+                Text(doc.source.displayName)
+              }
+              .font(.system(size: 12))
+              
+              HStack {
+                Text("Date:")
+                  .fontWeight(.medium)
+                Text(doc.date, style: .date)
+              }
+              .font(.system(size: 12))
+              
+              if let summary = doc.summary, !summary.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                  Text("Summary:")
+                    .fontWeight(.medium)
+                  Text(summary)
+                    .foregroundStyle(.secondary)
+                }
+                .font(.system(size: 12))
+              }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.08))
+            .cornerRadius(8)
+          }
+          
+          if let error = errorMessage {
+            HStack(spacing: 8) {
+              Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+              Text(error)
+                .font(.subheadline)
+                .foregroundStyle(.red)
+            }
+            .padding()
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(8)
+          }
+        }
+        .padding()
+      }
+      
+      Divider()
+      
+      HStack {
+        Button("Cancel") {
+          isPresented = false
+        }
+        .keyboardShortcut(.cancelAction)
+        
+        Spacer()
+        
+        Button {
+          saveRequest()
+        } label: {
+          if isSaving {
+            ProgressView()
+              .scaleEffect(0.7)
+          } else {
+            HStack(spacing: 4) {
+              Image(systemName: "arrow.up.doc")
+              Text("Create Research Request")
+            }
+          }
+        }
+        .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+        .keyboardShortcut(.defaultAction)
+      }
+      .padding()
+    }
+    .frame(width: 600, height: 650)
+    .background(Theme.bg)
+  }
+  
+  private func saveRequest() {
+    isSaving = true
+    errorMessage = nil
+    
+    // Build full prompt with document context
+    var fullPrompt = "**Follow-up Research Request**\n\n"
+    fullPrompt += "**Source Document:** \(doc.title)\n"
+    fullPrompt += "**Source Agent:** \(doc.source.displayName)\n"
+    fullPrompt += "**Document Date:** \(doc.date.formatted(date: .abbreviated, time: .omitted))\n"
+    
+    if let summary = doc.summary, !summary.isEmpty {
+      fullPrompt += "**Document Summary:** \(summary)\n"
+    }
+    
+    fullPrompt += "\n---\n\n"
+    fullPrompt += "**Research Question:**\n\(prompt.trimmingCharacters(in: .whitespacesAndNewlines))\n"
+    
+    if !comments.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      fullPrompt += "\n**Additional Context:**\n\(comments)\n"
+    }
+    
+    fullPrompt += "\n---\n\n"
+    fullPrompt += "**Document ID:** \(doc.id)"
+    
+    Task {
+      do {
+        // Try to create research request linked to topic if available
+        if let topicId = doc.topicId {
+          _ = try await vm.api.createResearchRequestForTopic(
+            topicId: topicId,
+            prompt: fullPrompt
+          )
+        } else if let projectId = doc.projectId {
+          // Fallback to project-based request
+          let request = ResearchRequest(
+            id: UUID().uuidString,
+            projectId: projectId,
+            topicId: nil,
+            tileId: nil,
+            prompt: fullPrompt,
+            status: .open,
+            response: nil,
+            author: "rafe",
+            priority: .normal,
+            deliverables: nil,
+            editHistory: nil,
+            parentRequestId: nil,
+            assignedWorker: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+          )
+          
+          try await vm.api.addResearchRequest(projectId: projectId, request: request)
+        } else {
+          throw NSError(domain: "DocumentDetailView", code: 1, userInfo: [NSLocalizedDescriptionKey: "No topic or project associated with this document"])
+        }
+        
+        await vm.loadResearchRequests()
+        
+        await MainActor.run {
+          vm.flashSuccess("Follow-up research request created")
           isPresented = false
         }
       } catch {
