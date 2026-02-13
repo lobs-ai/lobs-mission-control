@@ -1,10 +1,10 @@
-Removed inbox indicators from projects. Inbox is now properly scoped as its own separate feature.
+Removed "Worker ran" events from Command Center recent activity display.
 
 Changes:
-- TasksContainerView: Removed inbox count badge from project top bar
-- TasksContainerView: Removed inbox stat badge from project cards in overview
-- TasksContainerView: Removed inboxCount calculation from RichProjectCard
-- CommandCenterView: Removed inbox from project stats breakdown
+- CommandCenterView.swift: Removed worker run events from activityFeed (now only shows task completions and inbox items)
+- Added WorkerRunActivityFilterTests.swift to verify worker runs are filtered out
+- Kept ActivityEvent.workerRun enum case for potential future use
 
-Tests: Added InboxNotOnProjectsTests. Build completes successfully (2.92s).
-Note: Test suite has pre-existing build issue (multiple producers error), not related to these changes.
+Build: Successful (3.14s)
+Tests: Created structural tests verifying worker runs are excluded from activity feed
+Note: Test suite has pre-existing build issue (multiple producers error) unrelated to this change

@@ -171,15 +171,8 @@ struct CommandCenterView: View {
       events.append(.inboxItem(item))
     }
     
-    // Worker runs
-    if let runs = vm.workerHistory?.runs {
-      for run in runs {
-        let d = run.endedAt ?? run.startedAt
-        if let d, d >= weekAgo {
-          events.append(.workerRun(run))
-        }
-      }
-    }
+    // Worker runs - removed from recent activity display
+    // (keeping enum case for potential future use)
     
     return events
       .sorted { $0.date > $1.date }
