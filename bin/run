@@ -2,7 +2,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-APP_BUNDLE="${APP_BUNDLE_DEST:-$REPO_DIR/.build/LobsDashboard.app}"
+APP_BUNDLE="${APP_BUNDLE_DEST:-$REPO_DIR/.build/LobsMissionControl.app}"
 
 # Resolve the executable path dynamically so this works across architectures
 # and with the current binary name.
@@ -39,8 +39,8 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 # Symlink the executable
-rm -f "$APP_BUNDLE/Contents/MacOS/lobs-dashboard"
-ln -s "$EXECUTABLE" "$APP_BUNDLE/Contents/MacOS/lobs-dashboard"
+rm -f "$APP_BUNDLE/Contents/MacOS/lobs-mission-control"
+ln -s "$EXECUTABLE" "$APP_BUNDLE/Contents/MacOS/lobs-mission-control"
 
 # Copy bundled resources if they exist
 EXECUTABLE_DIR="$(dirname "$EXECUTABLE")"
@@ -58,11 +58,13 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key>
-  <string>com.lobs.dashboard</string>
+  <string>com.lobs.mission-control</string>
   <key>CFBundleName</key>
-  <string>LobsDashboard</string>
+  <string>Lobs Mission Control</string>
+  <key>CFBundleDisplayName</key>
+  <string>Lobs Mission Control</string>
   <key>CFBundleExecutable</key>
-  <string>lobs-dashboard</string>
+  <string>lobs-mission-control</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSUIElement</key>
@@ -73,7 +75,7 @@ PLIST
 
 # Optional dev signing.
 # Default is unsigned launch to keep local privacy permissions stable.
-if [ "${LOBSDASHBOARD_CODESIGN:-0}" = "1" ]; then
+if [ "${LOBS_CODESIGN:-0}" = "1" ]; then
   codesign --force --sign - "$APP_BUNDLE" 2>/dev/null || true
 fi
 
