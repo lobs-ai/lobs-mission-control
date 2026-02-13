@@ -349,8 +349,8 @@ private struct AgentCard: View {
         }
         
         VStack(alignment: .leading, spacing: 4) {
-          if let lastActive = agent.lastActive {
-            Text("Last active \(timeAgoString(lastActive))")
+          if let lastActive = agent.lastActive, let date = parseISO(lastActive) {
+            Text("Last active \(timeAgoString(date))")
               .font(.caption2)
               .foregroundStyle(.secondary)
           } else {
@@ -396,6 +396,18 @@ private struct AgentCard: View {
     } else {
       return "\(Int(elapsed/86400))d ago"
     }
+  }
+  
+  private func parseISO(_ str: String) -> Date? {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime]
+    if let d = f.date(from: str) { return d }
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let d = f.date(from: str) { return d }
+    let nf = DateFormatter()
+    nf.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+    nf.timeZone = TimeZone(identifier: "UTC")
+    return nf.date(from: str)
   }
 }
 

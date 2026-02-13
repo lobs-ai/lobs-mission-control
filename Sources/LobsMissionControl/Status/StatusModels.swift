@@ -1,6 +1,8 @@
 import Foundation
 
 // MARK: - System Overview
+// Note: APIService decoder uses .convertFromSnakeCase, so no manual CodingKeys needed
+// for simple snake_case → camelCase conversions.
 
 struct SystemOverview: Codable {
   let server: ServerHealth
@@ -12,15 +14,9 @@ struct SystemOverview: Codable {
   let inbox: InboxSummary
   
   struct ServerHealth: Codable {
-    let status: String // "healthy", "degraded", "down"
+    let status: String
     let uptimeSeconds: Int
     let version: String
-    
-    enum CodingKeys: String, CodingKey {
-      case status
-      case uptimeSeconds = "uptime_seconds"
-      case version
-    }
   }
   
   struct OrchestratorStatus: Codable {
@@ -32,26 +28,14 @@ struct SystemOverview: Codable {
     let active: Int
     let totalCompleted: Int
     let totalFailed: Int
-    
-    enum CodingKeys: String, CodingKey {
-      case active
-      case totalCompleted = "total_completed"
-      case totalFailed = "total_failed"
-    }
   }
   
   struct AgentStatusSummary: Codable, Identifiable {
     let type: String
-    let status: String // "active", "idle", "error"
-    let lastActive: Date?
+    let status: String
+    let lastActive: String?  // Server sends ISO string or null, not Date
     
     var id: String { type }
-    
-    enum CodingKeys: String, CodingKey {
-      case type
-      case status
-      case lastActive = "last_active"
-    }
   }
   
   struct TasksSummary: Codable {
@@ -59,37 +43,15 @@ struct SystemOverview: Codable {
     let waiting: Int
     let blocked: Int
     let completedToday: Int
-    
-    enum CodingKeys: String, CodingKey {
-      case active
-      case waiting
-      case blocked
-      case completedToday = "completed_today"
-    }
   }
   
   struct MemoriesSummary: Codable {
     let total: Int
     let todayEntries: Int
-    
-    enum CodingKeys: String, CodingKey {
-      case total
-      case todayEntries = "today_entries"
-    }
   }
   
   struct InboxSummary: Codable {
     let unread: Int
-  }
-  
-  enum CodingKeys: String, CodingKey {
-    case server
-    case orchestrator
-    case workers
-    case agents
-    case tasks
-    case memories
-    case inbox
   }
 }
 
@@ -97,7 +59,7 @@ struct SystemOverview: Codable {
 
 struct ActivityEvent: Codable, Identifiable {
   let id: String
-  let type: String // "task_completed", "worker_spawned", "error", "info", etc.
+  let type: String
   let title: String
   let timestamp: Date
   let details: String?
@@ -109,21 +71,25 @@ struct ActivityEvent: Codable, Identifiable {
   enum EventType: String {
     case taskCompleted = "task_completed"
     case taskCreated = "task_created"
+    case taskUpdated = "task_updated"
     case workerSpawned = "worker_spawned"
     case workerCompleted = "worker_completed"
     case workerFailed = "worker_failed"
+    case inboxReceived = "inbox_received"
+    case memoryUpdated = "memory_updated"
     case error
     case warning
     case info
     
     var icon: String {
       switch self {
-      case .taskCompleted: return "checkmark.circle.fill"
+      case .taskCompleted, .workerCompleted: return "checkmark.circle.fill"
       case .taskCreated: return "plus.circle.fill"
+      case .taskUpdated: return "arrow.triangle.2.circlepath"
       case .workerSpawned: return "gearshape.circle.fill"
-      case .workerCompleted: return "checkmark.circle.fill"
-      case .workerFailed: return "xmark.circle.fill"
-      case .error: return "exclamationmark.triangle.fill"
+      case .workerFailed, .error: return "exclamationmark.triangle.fill"
+      case .inboxReceived: return "tray.fill"
+      case .memoryUpdated: return "brain.head.profile"
       case .warning: return "exclamationmark.circle.fill"
       case .info: return "info.circle.fill"
       }
@@ -133,18 +99,19 @@ struct ActivityEvent: Codable, Identifiable {
       switch self {
       case .taskCompleted, .workerCompleted: return "green"
       case .taskCreated, .workerSpawned: return "blue"
+      case .taskUpdated: return "gray"
       case .workerFailed, .error: return "red"
+      case .inboxReceived: return "orange"
+      case .memoryUpdated: return "purple"
       case .warning: return "orange"
       case .info: return "gray"
       }
     }
   }
   
-  // Custom decoding to handle missing id field from server
+  // Server doesn't send id — generate client-side
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    
-    // Server doesn't send id, so we generate a UUID
     self.id = UUID().uuidString
     self.type = try container.decode(String.self, forKey: .type)
     self.title = try container.decode(String.self, forKey: .title)
@@ -152,7 +119,6 @@ struct ActivityEvent: Codable, Identifiable {
     self.details = try container.decodeIfPresent(String.self, forKey: .details)
   }
   
-  // Manual initializer for testing/creation
   init(id: String = UUID().uuidString, type: String, title: String, timestamp: Date, details: String? = nil) {
     self.id = id
     self.type = type
@@ -162,10 +128,7 @@ struct ActivityEvent: Codable, Identifiable {
   }
   
   enum CodingKeys: String, CodingKey {
-    case type
-    case title
-    case timestamp
-    case details
+    case type, title, timestamp, details
   }
 }
 
@@ -182,16 +145,7 @@ struct CostSummary: Codable {
     let tokensOut: Int
     let estimatedCost: Double
     
-    // Computed property for total tokens
-    var tokensUsed: Int {
-      tokensIn + tokensOut
-    }
-    
-    enum CodingKeys: String, CodingKey {
-      case tokensIn = "tokens_in"
-      case tokensOut = "tokens_out"
-      case estimatedCost = "estimated_cost"
-    }
+    var tokensUsed: Int { tokensIn + tokensOut }
   }
   
   struct AgentCost: Codable, Identifiable {
@@ -200,24 +154,6 @@ struct CostSummary: Codable {
     let runs: Int
     
     var id: String { type }
-    
-    // Computed estimated cost (rough approximation if not provided by server)
-    var estimatedCost: Double {
-      // Rough estimate: $0.01 per 1K tokens
-      return Double(tokensTotal) / 1000.0 * 0.01
-    }
-    
-    enum CodingKeys: String, CodingKey {
-      case type
-      case tokensTotal = "tokens_total"
-      case runs
-    }
-  }
-  
-  enum CodingKeys: String, CodingKey {
-    case today
-    case week
-    case month
-    case byAgent = "by_agent"
+    var estimatedCost: Double { Double(tokensTotal) / 1000.0 * 0.01 }
   }
 }
