@@ -73,6 +73,202 @@ struct ContentView: View {
   @State private var chatViewModel: ChatViewModel?
 
   var body: some View {
+    mainContent
+      .animation(.easeInOut(duration: 0.3), value: vm.errorBanner != nil)
+      .animation(.easeInOut(duration: 0.3), value: vm.successBanner != nil)
+      .animation(.easeInOut(duration: 0.3), value: vm.syncBlockedByUncommitted)
+      .animation(.easeOut(duration: 0.2), value: vm.isGitBusy)
+      .fileImporter(
+        isPresented: $showPicker,
+        allowedContentTypes: [.folder]
+      ) { result in
+        switch result {
+        case .success(let url):
+          vm.setRepoURL(url)
+          showOnboarding = false  // Close onboarding if it was open
+          vm.reload()
+        case .failure(let err):
+          vm.lastError = String(describing: err)
+        }
+      }
+      .sheet(isPresented: $showAddTask) {
+        AddTaskSheet(
+          vm: vm,
+          autoPush: $autoPush,
+          projectId: vm.showOverview ? nil : vm.selectedProjectId
+        )
+      }
+      .sheet(isPresented: $showCreateProject) {
+        CreateProjectSheet(vm: vm)
+      }
+      .sheet(item: $editingProject) { project in
+        EditProjectSheet(vm: vm, project: project)
+      }
+      .sheet(isPresented: $showTemplates) {
+        TemplateManagerSheet(vm: vm)
+      }
+      .sheet(isPresented: $showTextDump) {
+        TextDumpSheet(vm: vm, projectId: vm.showOverview ? nil : vm.selectedProjectId)
+      }
+      .sheet(isPresented: $showTextDumpResults) {
+        TextDumpResultsSheet(vm: vm)
+      }
+      .sheet(isPresented: $showOnboarding) {
+        OnboardingSheet(vm: vm, showPicker: $showPicker)
+      }
+      .sheet(isPresented: $showFirstTaskWalkthrough) {
+        FirstTaskWalkthroughSheet(
+          vm: vm,
+          autoPush: $autoPush,
+          openNewTaskSheet: { showAddTask = true },
+          openInbox: { withAnimation(.easeInOut(duration: 0.25)) { showInbox = true } }
+        )
+      }
+      .sheet(isPresented: $vm.syncConflictDetailsPresented) {
+        SyncConflictDetailsView(vm: vm)
+      }
+      .confirmationDialog(
+        "A previous sync was interrupted. How do you want to proceed?",
+        isPresented: $vm.rebaseRecoveryPresented,
+        titleVisibility: .visible
+      ) {
+        Button("Continue Rebase") { vm.rebaseRecoveryContinue() }
+        Button("Skip This Commit") { vm.rebaseRecoverySkip() }
+        Button("Abort Rebase", role: .destructive) { vm.rebaseRecoveryAbort() }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text(vm.rebaseRecoveryDialogMessage)
+      }
+      .onAppear {
+        // Initialize chat view model
+        if chatViewModel == nil {
+          let chatService = ChatService()
+          chatViewModel = ChatViewModel(chatService: chatService, apiService: vm.api)
+        }
+
+        // Initialize memory view model
+        if memoryViewModel == nil {
+          memoryViewModel = MemoryViewModel(apiService: vm.api)
+        }
+
+        // Check if onboarding is needed on first launch
+        if vm.needsOnboarding {
+          showOnboarding = true
+        } else {
+          vm.reloadIfPossible()
+          if !vm.firstTaskWalkthroughComplete {
+            // Let the UI settle so the sheet appears cleanly.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+              showFirstTaskWalkthrough = true
+            }
+          }
+        }
+      }
+      .onChange(of: vm.textDumps) { _ in
+        // Auto-show results when a dump finishes processing
+        if !vm.unreviewedCompletedDumps.isEmpty && !showTextDumpResults {
+          showTextDumpResults = true
+        }
+      }
+      // Keyboard shortcuts (Task #84248F22)
+      .background(
+        KeyboardShortcutReceiver(
+          onNewTask: { showAddTask = true },
+          onRefresh: { vm.reload() },
+          onNextTask: { vm.selectNextTask() },
+          onPrevTask: { vm.selectPreviousTask() },
+          onNextColumn: { vm.selectNextColumn() },
+          onPrevColumn: { vm.selectPreviousColumn() },
+          onSearch: {
+            // ⌘K: open global command palette
+            showCommandPalette = true
+          },
+          onHelp: { withAnimation(.easeInOut(duration: 0.25)) { showHelp = true } },
+          onInbox: { withAnimation(.easeInOut(duration: 0.25)) { showInbox = true } },
+          onDocuments: { withAnimation(.easeInOut(duration: 0.25)) { showDocuments = true } },
+          onOverview: {
+            // ⌘⇧O → Overview
+            vm.showOverview = true
+          },
+          onProjectSwitch: { index in
+            let projects = vm.sortedActiveProjects
+            if index == 0 {
+              // ⌘0 → Overview
+              vm.showOverview = true
+            } else if index <= projects.count {
+              vm.selectedProjectId = projects[index - 1].id
+              vm.showOverview = false
+            }
+          },
+          onEscape: {
+            if showCommandPalette { withAnimation(.easeInOut(duration: 0.25)) { showCommandPalette = false }; return true }
+            if showAIUsage { withAnimation(.easeInOut(duration: 0.25)) { showAIUsage = false }; return true }
+            if showInbox { withAnimation(.easeInOut(duration: 0.25)) { showInbox = false }; return true }
+            if showMemory { withAnimation(.easeInOut(duration: 0.25)) { showMemory = false }; return true }
+            if showStatus { withAnimation(.easeInOut(duration: 0.25)) { showStatus = false }; return true }
+            if showSettings { showSettings = false; return true }
+            if showHelp { withAnimation(.easeInOut(duration: 0.25)) { showHelp = false }; return true }
+            if vm.popoverTaskId != nil { vm.popoverTaskId = nil; return true }
+            if vm.isMultiSelectActive { withAnimation { vm.clearMultiSelect() }; return true }
+            return false
+          },
+          onEnter: {
+            // Open task detail for the currently selected task (toggle).
+            guard let id = vm.selectedTaskId else { return }
+            vm.popoverTaskId = (vm.popoverTaskId == id) ? nil : id
+          },
+          onMoveToActive: {
+            if vm.isMultiSelectActive {
+              vm.bulkMoveSelected(to: .active)
+            } else if let id = vm.selectedTaskId {
+              vm.moveTask(taskId: id, to: .active)
+            }
+          },
+          onMoveToWaitingOn: {
+            if vm.isMultiSelectActive {
+              vm.bulkMoveSelected(to: .waitingOn)
+            } else if let id = vm.selectedTaskId {
+              vm.moveTask(taskId: id, to: .waitingOn)
+            }
+          },
+          onComplete: {
+            if vm.isMultiSelectActive {
+              vm.bulkMoveSelected(to: .completed)
+            } else {
+              vm.completeSelected(autoPush: autoPush)
+            }
+          },
+          onReject: {
+            if vm.isMultiSelectActive {
+              vm.bulkMoveSelected(to: .rejected)
+            } else {
+              vm.rejectSelected(autoPush: autoPush)
+            }
+          },
+          onReopen: {
+            if vm.isMultiSelectActive {
+              vm.bulkMoveSelected(to: .active)
+            } else {
+              vm.reopenSelected(autoPush: autoPush)
+            }
+          },
+          onToggleBlock: {
+            if !vm.isMultiSelectActive {
+              vm.toggleBlockSelected(autoPush: autoPush)
+            }
+          },
+          onApprove: {
+            vm.approveSelected(autoPush: autoPush)
+          },
+          onRequestChanges: {
+            vm.requestChangesSelected(autoPush: autoPush)
+          }
+        )
+      )
+  }
+
+  @ViewBuilder
+  private var mainContent: some View {
     ZStack(alignment: .top) {
       // Board
       VStack(spacing: 0) {
@@ -483,197 +679,6 @@ struct ContentView: View {
           .zIndex(201)
       }
     }
-    .animation(.easeInOut(duration: 0.3), value: vm.errorBanner != nil)
-    .animation(.easeInOut(duration: 0.3), value: vm.successBanner != nil)
-    .animation(.easeInOut(duration: 0.3), value: vm.syncBlockedByUncommitted)
-    .animation(.easeOut(duration: 0.2), value: vm.isGitBusy)
-    .fileImporter(
-      isPresented: $showPicker,
-      allowedContentTypes: [.folder]
-    ) { result in
-      switch result {
-      case .success(let url):
-        vm.setRepoURL(url)
-        showOnboarding = false  // Close onboarding if it was open
-        vm.reload()
-      case .failure(let err):
-        vm.lastError = String(describing: err)
-      }
-    }
-    .sheet(isPresented: $showAddTask) {
-      AddTaskSheet(
-        vm: vm,
-        autoPush: $autoPush,
-        projectId: vm.showOverview ? nil : vm.selectedProjectId
-      )
-    }
-    .sheet(isPresented: $showCreateProject) {
-      CreateProjectSheet(vm: vm)
-    }
-    .sheet(item: $editingProject) { project in
-      EditProjectSheet(vm: vm, project: project)
-    }
-    .sheet(isPresented: $showTemplates) {
-      TemplateManagerSheet(vm: vm)
-    }
-    .sheet(isPresented: $showTextDump) {
-      TextDumpSheet(vm: vm, projectId: vm.showOverview ? nil : vm.selectedProjectId)
-    }
-    .sheet(isPresented: $showTextDumpResults) {
-      TextDumpResultsSheet(vm: vm)
-    }
-    .sheet(isPresented: $showOnboarding) {
-      OnboardingSheet(vm: vm, showPicker: $showPicker)
-    }
-    .sheet(isPresented: $showFirstTaskWalkthrough) {
-      FirstTaskWalkthroughSheet(
-        vm: vm,
-        autoPush: $autoPush,
-        openNewTaskSheet: { showAddTask = true },
-        openInbox: { withAnimation(.easeInOut(duration: 0.25)) { showInbox = true } }
-      )
-    }
-    .sheet(isPresented: $vm.syncConflictDetailsPresented) {
-      SyncConflictDetailsView(vm: vm)
-    }
-    .confirmationDialog(
-      "A previous sync was interrupted. How do you want to proceed?",
-      isPresented: $vm.rebaseRecoveryPresented,
-      titleVisibility: .visible
-    ) {
-      Button("Continue Rebase") { vm.rebaseRecoveryContinue() }
-      Button("Skip This Commit") { vm.rebaseRecoverySkip() }
-      Button("Abort Rebase", role: .destructive) { vm.rebaseRecoveryAbort() }
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text(vm.rebaseRecoveryDialogMessage)
-    }
-    .onAppear {
-      // Initialize chat view model
-      if chatViewModel == nil {
-        let chatService = ChatService()
-        chatViewModel = ChatViewModel(chatService: chatService, apiService: vm.api)
-      }
-      
-      // Initialize memory view model
-      if memoryViewModel == nil {
-        memoryViewModel = MemoryViewModel(apiService: vm.api)
-      }
-      
-      // Check if onboarding is needed on first launch
-      if vm.needsOnboarding {
-        showOnboarding = true
-      } else {
-        vm.reloadIfPossible()
-        if !vm.firstTaskWalkthroughComplete {
-          // Let the UI settle so the sheet appears cleanly.
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            showFirstTaskWalkthrough = true
-          }
-        }
-      }
-    }
-    .onChange(of: vm.textDumps) { _ in
-      // Auto-show results when a dump finishes processing
-      if !vm.unreviewedCompletedDumps.isEmpty && !showTextDumpResults {
-        showTextDumpResults = true
-      }
-    }
-    // Keyboard shortcuts (Task #84248F22)
-    .background(
-      KeyboardShortcutReceiver(
-        onNewTask: { showAddTask = true },
-        onRefresh: { vm.reload() },
-        onNextTask: { vm.selectNextTask() },
-        onPrevTask: { vm.selectPreviousTask() },
-        onNextColumn: { vm.selectNextColumn() },
-        onPrevColumn: { vm.selectPreviousColumn() },
-        onSearch: {
-          // ⌘K: open global command palette
-          showCommandPalette = true
-        },
-        onHelp: { withAnimation(.easeInOut(duration: 0.25)) { showHelp = true } },
-        onInbox: { withAnimation(.easeInOut(duration: 0.25)) { showInbox = true } },
-        onDocuments: { withAnimation(.easeInOut(duration: 0.25)) { showDocuments = true } },
-        onOverview: {
-          // ⌘⇧O → Overview
-          vm.showOverview = true
-        },
-        onProjectSwitch: { index in
-          let projects = vm.sortedActiveProjects
-          if index == 0 {
-            // ⌘0 → Overview
-            vm.showOverview = true
-          } else if index <= projects.count {
-            vm.selectedProjectId = projects[index - 1].id
-            vm.showOverview = false
-          }
-        },
-        onEscape: {
-          if showCommandPalette { withAnimation(.easeInOut(duration: 0.25)) { showCommandPalette = false }; return true }
-          if showAIUsage { withAnimation(.easeInOut(duration: 0.25)) { showAIUsage = false }; return true }
-          if showInbox { withAnimation(.easeInOut(duration: 0.25)) { showInbox = false }; return true }
-          if showMemory { withAnimation(.easeInOut(duration: 0.25)) { showMemory = false }; return true }
-          if showStatus { withAnimation(.easeInOut(duration: 0.25)) { showStatus = false }; return true }
-          if showSettings { showSettings = false; return true }
-          if showHelp { withAnimation(.easeInOut(duration: 0.25)) { showHelp = false }; return true }
-          if vm.popoverTaskId != nil { vm.popoverTaskId = nil; return true }
-          if vm.isMultiSelectActive { withAnimation { vm.clearMultiSelect() }; return true }
-          return false
-        },
-        onEnter: {
-          // Open task detail for the currently selected task (toggle).
-          guard let id = vm.selectedTaskId else { return }
-          vm.popoverTaskId = (vm.popoverTaskId == id) ? nil : id
-        },
-        onMoveToActive: {
-          if vm.isMultiSelectActive {
-            vm.bulkMoveSelected(to: .active)
-          } else if let id = vm.selectedTaskId {
-            vm.moveTask(taskId: id, to: .active)
-          }
-        },
-        onMoveToWaitingOn: {
-          if vm.isMultiSelectActive {
-            vm.bulkMoveSelected(to: .waitingOn)
-          } else if let id = vm.selectedTaskId {
-            vm.moveTask(taskId: id, to: .waitingOn)
-          }
-        },
-        onComplete: {
-          if vm.isMultiSelectActive {
-            vm.bulkMoveSelected(to: .completed)
-          } else {
-            vm.completeSelected(autoPush: autoPush)
-          }
-        },
-        onReject: {
-          if vm.isMultiSelectActive {
-            vm.bulkMoveSelected(to: .rejected)
-          } else {
-            vm.rejectSelected(autoPush: autoPush)
-          }
-        },
-        onReopen: {
-          if vm.isMultiSelectActive {
-            vm.bulkMoveSelected(to: .active)
-          } else {
-            vm.reopenSelected(autoPush: autoPush)
-          }
-        },
-        onToggleBlock: {
-          if !vm.isMultiSelectActive {
-            vm.toggleBlockSelected(autoPush: autoPush)
-          }
-        },
-        onApprove: {
-          vm.approveSelected(autoPush: autoPush)
-        },
-        onRequestChanges: {
-          vm.requestChangesSelected(autoPush: autoPush)
-        }
-      )
-    )
   }
 }
 

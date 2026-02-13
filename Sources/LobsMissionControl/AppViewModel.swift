@@ -1601,6 +1601,26 @@ final class AppViewModel: ObservableObject {
     syncConflictFiles = []
   }
 
+  func showSyncConflictDetails() {
+    syncConflictDetailsPresented = true
+  }
+
+  func recoverSyncConflictKeepMine() {
+    if let first = syncConflictFiles.first {
+      syncConflictResolveFileKeepingMine(first)
+    } else {
+      syncBlockedByUncommitted = false
+    }
+  }
+
+  func recoverSyncConflictUseRemote() {
+    if let first = syncConflictFiles.first {
+      syncConflictResolveFileUsingRemote(first)
+    } else {
+      syncBlockedByUncommitted = false
+    }
+  }
+
   func syncConflictResolveFileKeepingMine(_ path: String) {
     _ = path
   }
