@@ -2793,8 +2793,17 @@ final class AppViewModel: ObservableObject {
       projects[idx].archived = true
       projects[idx].updatedAt = Date()
     }
+    
+    // If archiving the currently selected project, switch to another project
     if selectedProjectId == id {
-      selectedProjectId = "default"
+      // Find first non-archived project that isn't the one being archived
+      if let firstActive = projects.first(where: { $0.id != id && ($0.archived ?? false) == false }) {
+        selectedProjectId = firstActive.id
+      } else {
+        // If no other projects exist, fall back to default
+        // (This handles the edge case where default is being archived and is the only project)
+        selectedProjectId = "default"
+      }
     }
 
     Task {
