@@ -26,3 +26,6 @@ Sources/LobsDashboard/BuildInfo.generated.swift
 .cache/
 cache/
 tmp/
+
+
+BuildInfo.generated.swift
