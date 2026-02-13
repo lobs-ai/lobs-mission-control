@@ -72,20 +72,26 @@ final class CalendarViewModel: ObservableObject {
         scheduledAt: Date,
         endAt: Date?,
         allDay: Bool
-    ) async throws {
-        _ = try await apiService.createEvent(
-            title: title,
-            description: description,
-            eventType: eventType,
-            scheduledAt: scheduledAt,
-            endAt: endAt,
-            allDay: allDay,
-            recurrenceRule: nil,
-            targetType: "self",
-            targetAgent: nil
-        )
+    ) async {
+        errorMessage = nil
         
-        await loadEvents()
+        do {
+            _ = try await apiService.createEvent(
+                title: title,
+                description: description,
+                eventType: eventType,
+                scheduledAt: scheduledAt,
+                endAt: endAt,
+                allDay: allDay,
+                recurrenceRule: nil,
+                targetType: "self",
+                targetAgent: nil
+            )
+            
+            await loadEvents()
+        } catch {
+            errorMessage = "Failed to create event: \(error.localizedDescription)"
+        }
     }
     
     // MARK: - Update Event
@@ -99,26 +105,38 @@ final class CalendarViewModel: ObservableObject {
         endAt: Date?,
         allDay: Bool?,
         status: String?
-    ) async throws {
-        _ = try await apiService.updateEvent(
-            id: id,
-            title: title,
-            description: description,
-            eventType: eventType,
-            scheduledAt: scheduledAt,
-            endAt: endAt,
-            allDay: allDay,
-            status: status
-        )
+    ) async {
+        errorMessage = nil
         
-        await loadEvents()
+        do {
+            _ = try await apiService.updateEvent(
+                id: id,
+                title: title,
+                description: description,
+                eventType: eventType,
+                scheduledAt: scheduledAt,
+                endAt: endAt,
+                allDay: allDay,
+                status: status
+            )
+            
+            await loadEvents()
+        } catch {
+            errorMessage = "Failed to update event: \(error.localizedDescription)"
+        }
     }
     
     // MARK: - Delete Event
     
-    func deleteEvent(id: String) async throws {
-        try await apiService.deleteEvent(id: id)
-        await loadEvents()
+    func deleteEvent(id: String) async {
+        errorMessage = nil
+        
+        do {
+            try await apiService.deleteEvent(id: id)
+            await loadEvents()
+        } catch {
+            errorMessage = "Failed to delete event: \(error.localizedDescription)"
+        }
     }
     
     // MARK: - Helpers

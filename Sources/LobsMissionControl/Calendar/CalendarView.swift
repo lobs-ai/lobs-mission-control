@@ -293,8 +293,10 @@ struct CalendarView: View {
                         
                         Button("Delete", role: .destructive) {
                             Task {
-                                try? await viewModel.deleteEvent(id: event.id)
-                                viewModel.selectedEvent = nil
+                                await viewModel.deleteEvent(id: event.id)
+                                if viewModel.errorMessage == nil {
+                                    viewModel.selectedEvent = nil
+                                }
                             }
                         }
                     } label: {
@@ -683,19 +685,18 @@ struct NewEventSheet: View {
     func createEvent() async {
         isSubmitting = true
         
-        do {
-            try await viewModel.createEvent(
-                title: title,
-                description: description.isEmpty ? nil : description,
-                eventType: eventType,
-                scheduledAt: scheduledAt,
-                endAt: hasEndTime ? endAt : nil,
-                allDay: allDay
-            )
+        await viewModel.createEvent(
+            title: title,
+            description: description.isEmpty ? nil : description,
+            eventType: eventType,
+            scheduledAt: scheduledAt,
+            endAt: hasEndTime ? endAt : nil,
+            allDay: allDay
+        )
+        
+        // Only dismiss if no error occurred
+        if viewModel.errorMessage == nil {
             dismiss()
-        } catch {
-            // Handle error - could show alert
-            print("Error creating event: \(error)")
         }
         
         isSubmitting = false
@@ -804,22 +805,21 @@ struct EditEventSheet: View {
     func updateEvent() async {
         isSubmitting = true
         
-        do {
-            try await viewModel.updateEvent(
-                id: event.id,
-                title: title,
-                description: description.isEmpty ? nil : description,
-                eventType: eventType,
-                scheduledAt: scheduledAt,
-                endAt: hasEndTime ? endAt : nil,
-                allDay: allDay,
-                status: status
-            )
+        await viewModel.updateEvent(
+            id: event.id,
+            title: title,
+            description: description.isEmpty ? nil : description,
+            eventType: eventType,
+            scheduledAt: scheduledAt,
+            endAt: hasEndTime ? endAt : nil,
+            allDay: allDay,
+            status: status
+        )
+        
+        // Only dismiss if no error occurred
+        if viewModel.errorMessage == nil {
             viewModel.selectedEvent = nil
             dismiss()
-        } catch {
-            // Handle error
-            print("Error updating event: \(error)")
         }
         
         isSubmitting = false
