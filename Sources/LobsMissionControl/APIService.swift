@@ -561,25 +561,6 @@ final class APIService {
     }
   }
   
-  func loadInboxThread(docId: String) async throws -> InboxThread? {
-    struct ThreadResponse: Codable {
-      let thread: InboxThread?
-      let messages: [InboxThreadMessage]
-    }
-    
-    let response: ThreadResponse = try await request(
-      method: "GET",
-      path: "/api/inbox/\(docId)/thread"
-    )
-    
-    guard var thread = response.thread else {
-      return nil
-    }
-    
-    thread.messages = response.messages
-    return thread
-  }
-  
   func saveInboxThread(_ thread: InboxThread) async throws -> InboxThread {
     // Only save the last message (the newly added one)
     guard let message = thread.messages.last else { return thread }
@@ -615,10 +596,17 @@ final class APIService {
     )
     
     // Reload the full thread from server to stay in sync
-    return try await loadInboxThread(docId: docId)
+    if let thread = try await loadInboxThread(docId: docId) {
+      return thread
+    }
+    // Shouldn't happen since we just posted, but return a minimal thread
+    return InboxThread(
+      id: UUID().uuidString, docId: docId,
+      messages: [message], createdAt: Date(), updatedAt: Date()
+    )
   }
   
-  func loadInboxThread(docId: String) async throws -> InboxThread {
+  func loadInboxThread(docId: String) async throws -> InboxThread? {
     struct ServerThread: Codable {
       let id: String
       let docId: String
@@ -637,29 +625,21 @@ final class APIService {
       path: "/api/inbox/\(docId)/thread"
     )
     
-    if let t = response.thread {
-      let triage: InboxTriageStatus
-      switch t.triageStatus {
-      case "resolved": triage = .resolved
-      case "pending": triage = .pending
-      default: triage = .needsResponse
-      }
-      return InboxThread(
-        id: t.id,
-        docId: t.docId,
-        messages: response.messages,
-        triageStatus: triage,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt
-      )
-    }
+    guard let t = response.thread else { return nil }
     
+    let triage: InboxTriageStatus
+    switch t.triageStatus {
+    case "resolved": triage = .resolved
+    case "pending": triage = .pending
+    default: triage = .needsResponse
+    }
     return InboxThread(
-      id: UUID().uuidString,
-      docId: docId,
-      messages: [],
-      createdAt: Date(),
-      updatedAt: Date()
+      id: t.id,
+      docId: t.docId,
+      messages: response.messages,
+      triageStatus: triage,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt
     )
   }
   
