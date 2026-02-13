@@ -1444,11 +1444,14 @@ final class APIService {
   
   // MARK: - Memory
   
-  func fetchMemories(type: String? = nil, limit: Int? = nil) async throws -> [MemoryItem] {
+  func fetchMemories(type: String? = nil, agent: String? = nil, limit: Int? = nil) async throws -> [MemoryItem] {
     var queryItems: [URLQueryItem] = []
     
     if let type = type {
       queryItems.append(URLQueryItem(name: "type", value: type))
+    }
+    if let agent = agent {
+      queryItems.append(URLQueryItem(name: "agent", value: agent))
     }
     if let limit = limit {
       queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
@@ -1510,11 +1513,31 @@ final class APIService {
     )
   }
   
-  func searchMemories(query: String) async throws -> [MemorySearchResult] {
+  func searchMemories(query: String, agent: String? = nil) async throws -> [MemorySearchResult] {
+    var queryItems = [URLQueryItem(name: "q", value: query)]
+    if let agent = agent {
+      queryItems.append(URLQueryItem(name: "agent", value: agent))
+    }
+    
     return try await request(
       method: "GET",
       path: "/api/memories/search",
-      queryItems: [URLQueryItem(name: "q", value: query)]
+      queryItems: queryItems
+    )
+  }
+  
+  func fetchMemoryAgents() async throws -> [AgentMemoryInfo] {
+    return try await request(
+      method: "GET",
+      path: "/api/memories/agents"
+    )
+  }
+  
+  func syncMemories(agent: String? = nil) async throws -> SyncResult {
+    let path = agent.map { "/api/memories/sync/\($0)" } ?? "/api/memories/sync"
+    return try await request(
+      method: "POST",
+      path: path
     )
   }
   

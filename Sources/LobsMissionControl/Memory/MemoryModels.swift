@@ -5,6 +5,7 @@ import Foundation
 struct MemoryItem: Codable, Identifiable {
     let id: Int
     let path: String
+    let agent: String
     let title: String
     let memoryType: String  // "long_term", "daily", "custom"
     let date: Date?
@@ -13,6 +14,7 @@ struct MemoryItem: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case path
+        case agent
         case title
         case memoryType = "memory_type"
         case date
@@ -37,6 +39,18 @@ struct MemoryItem: Codable, Identifiable {
         }
     }
     
+    var agentBadgeColor: NSColor {
+        switch agent {
+        case "main": return .systemBlue
+        case "programmer": return .systemPurple
+        case "writer": return .systemGreen
+        case "researcher": return .systemOrange
+        case "reviewer": return .systemPink
+        case "architect": return .systemTeal
+        default: return .systemGray
+        }
+    }
+    
     var displayTitle: String {
         if memoryType == "long_term" {
             return "🧠 \(title)"
@@ -50,6 +64,7 @@ struct MemoryItem: Codable, Identifiable {
 struct MemoryDetail: Codable, Identifiable {
     let id: Int
     let path: String
+    let agent: String
     let title: String
     let content: String
     let memoryType: String
@@ -60,6 +75,7 @@ struct MemoryDetail: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case path
+        case agent
         case title
         case content
         case memoryType = "memory_type"
@@ -74,6 +90,7 @@ struct MemoryDetail: Codable, Identifiable {
 struct MemorySearchResult: Codable, Identifiable {
     let id: Int
     let path: String
+    let agent: String
     let title: String
     let snippet: String
     let memoryType: String
@@ -83,12 +100,38 @@ struct MemorySearchResult: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case path
+        case agent
         case title
         case snippet
         case memoryType = "memory_type"
         case date
         case score
     }
+}
+
+// MARK: - Agent Memory Info
+
+struct AgentMemoryInfo: Codable, Identifiable {
+    let agent: String
+    let memoryCount: Int
+    let lastUpdated: String?
+    
+    var id: String { agent }
+    
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case memoryCount = "memory_count"
+        case lastUpdated = "last_updated"
+    }
+}
+
+// MARK: - Sync Result
+
+struct SyncResult: Codable {
+    let new: Int
+    let updated: Int
+    let unchanged: Int
+    let errors: [String]
 }
 
 #if os(macOS)
