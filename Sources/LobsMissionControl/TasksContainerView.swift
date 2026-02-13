@@ -216,13 +216,9 @@ struct TasksContainerView: View {
                 if !vm.selectedProjectId.isEmpty {
                     let projectTasks = vm.tasks.filter { $0.projectId == vm.selectedProjectId }
                     let activeCount = projectTasks.filter { $0.status == .active }.count
-                    let inboxCount = projectTasks.filter { $0.status == .inbox }.count
                     let blockedCount = projectTasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count
                     
                     HStack(spacing: 8) {
-                        if inboxCount > 0 {
-                            TaskCountBadge(label: "Inbox", count: inboxCount, color: .blue)
-                        }
                         if activeCount > 0 {
                             TaskCountBadge(label: "Active", count: activeCount, color: .orange)
                         }
@@ -662,7 +658,6 @@ private struct RichProjectCard: View {
     @State private var isHovering = false
     
     private var activeCount: Int { tasks.filter { $0.status == .active }.count }
-    private var inboxCount: Int { tasks.filter { $0.status == .inbox }.count }
     private var completedCount: Int { tasks.filter { $0.status == .completed }.count }
     private var blockedCount: Int { tasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count }
     private var totalCount: Int { tasks.count }
@@ -717,9 +712,6 @@ private struct RichProjectCard: View {
                 
                 // Task counts
                 HStack(spacing: 10) {
-                    if inboxCount > 0 {
-                        StatBadge(label: "Inbox", count: inboxCount, color: .blue)
-                    }
                     if activeCount > 0 {
                         StatBadge(label: "Active", count: activeCount, color: .orange)
                     }

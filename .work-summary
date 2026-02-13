@@ -1,1 +1,10 @@
-Fixed project pre-selection when adding task from project card. Added vm.showOverview = false to onAddTask closure, matching onSelect behavior. Now sheet receives correct projectId instead of nil. Build successful (3.50s). Created AddTaskProjectPreselectionTests.swift with 17 tests covering state transitions, user flows, and edge cases.
+Removed inbox indicators from projects. Inbox is now properly scoped as its own separate feature.
+
+Changes:
+- TasksContainerView: Removed inbox count badge from project top bar
+- TasksContainerView: Removed inbox stat badge from project cards in overview
+- TasksContainerView: Removed inboxCount calculation from RichProjectCard
+- CommandCenterView: Removed inbox from project stats breakdown
+
+Tests: Added InboxNotOnProjectsTests. Build completes successfully (2.92s).
+Note: Test suite has pre-existing build issue (multiple producers error), not related to these changes.

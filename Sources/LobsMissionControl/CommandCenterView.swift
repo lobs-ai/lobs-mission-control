@@ -635,13 +635,12 @@ private struct StatCard: View {
 private struct DetailedStatsSection: View {
   @ObservedObject var vm: AppViewModel
   
-  private var projectStats: [(project: Project, active: Int, inbox: Int, completed: Int, blocked: Int)] {
+  private var projectStats: [(project: Project, active: Int, completed: Int, blocked: Int)] {
     vm.sortedActiveProjects.map { project in
       let projectTasks = vm.tasks.filter { $0.projectId == project.id }
       return (
         project: project,
         active: projectTasks.filter { $0.status == .active }.count,
-        inbox: projectTasks.filter { $0.status == .inbox }.count,
         completed: projectTasks.filter { $0.status == .completed }.count,
         blocked: projectTasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count
       )
@@ -665,9 +664,6 @@ private struct DetailedStatsSection: View {
             HStack(spacing: 12) {
               if stat.active > 0 {
                 StatBadge(label: "Active", count: stat.active, color: .orange)
-              }
-              if stat.inbox > 0 {
-                StatBadge(label: "Inbox", count: stat.inbox, color: .blue)
               }
               if stat.completed > 0 {
                 StatBadge(label: "Done", count: stat.completed, color: .green)
