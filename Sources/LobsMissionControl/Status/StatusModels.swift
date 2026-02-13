@@ -34,6 +34,14 @@ struct UpdatePullResponse: Codable {
   let needsRestart: Bool
 }
 
+struct SelfUpdateResponse: Codable {
+  let success: Bool
+  let pullOutput: String
+  let buildOutput: String
+  let newCommit: String?
+  let binaryPath: String?
+}
+
 // MARK: - System Overview
 // Note: APIService decoder uses .convertFromSnakeCase, so no manual CodingKeys needed
 // for simple snake_case → camelCase conversions.

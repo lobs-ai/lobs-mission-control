@@ -734,6 +734,8 @@ private struct UpdatesSection: View {
   @State private var isChecking = false
   @State private var pullingRepo: String?
   @State private var pullResult: UpdatePullResponse?
+  @State private var selfUpdateResult: SelfUpdateResponse?
+  @State private var isSelfUpdating = false
   @State private var error: String?
   
   var body: some View {
@@ -802,12 +804,25 @@ private struct UpdatesSection: View {
           GridItem(.flexible())
         ], spacing: 12) {
           ForEach(check.repos) { repo in
-            RepoCard(
-              repo: repo,
-              isPulling: pullingRepo == repo.name,
-              onPull: { Task { await pullRepo(repo.name) } }
-            )
+            if repo.name == "lobs-mission-control" {
+              RepoCard(
+                repo: repo,
+                isPulling: isSelfUpdating,
+                pullLabel: isSelfUpdating ? "Updating..." : "Update & Relaunch",
+                onPull: { Task { await selfUpdate() } }
+              )
+            } else {
+              RepoCard(
+                repo: repo,
+                isPulling: pullingRepo == repo.name,
+                onPull: { Task { await pullRepo(repo.name) } }
+              )
+            }
           }
+        }
+        
+        if let result = selfUpdateResult {
+          SelfUpdateResultBanner(result: result, onRelaunch: relaunchApp)
         }
         
         if let result = pullResult {
@@ -849,6 +864,36 @@ private struct UpdatesSection: View {
     }
   }
   
+  private func selfUpdate() async {
+    isSelfUpdating = true
+    selfUpdateResult = nil
+    defer { isSelfUpdating = false }
+    
+    do {
+      let result = try await apiService.selfUpdateMissionControl()
+      selfUpdateResult = result
+      if result.success {
+        // Refresh update check
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        updateCheck = try await apiService.checkForUpdates()
+      }
+    } catch {
+      selfUpdateResult = SelfUpdateResponse(
+        success: false, pullOutput: error.localizedDescription,
+        buildOutput: "", newCommit: nil, binaryPath: nil
+      )
+    }
+  }
+  
+  private func relaunchApp() {
+    guard let binaryPath = selfUpdateResult?.binaryPath else { return }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/bin/sh")
+    process.arguments = ["-c", "sleep 1 && open \"\(binaryPath)\""]
+    try? process.run()
+    NSApplication.shared.terminate(nil)
+  }
+  
   private func pullRepo(_ name: String) async {
     pullingRepo = name
     pullResult = nil
@@ -874,6 +919,7 @@ private struct UpdatesSection: View {
 private struct RepoCard: View {
   let repo: RepoUpdateInfo
   let isPulling: Bool
+  var pullLabel: String? = nil
   let onPull: () -> Void
   
   var body: some View {
@@ -948,7 +994,7 @@ private struct RepoCard: View {
                 } else {
                   Image(systemName: "arrow.down.circle.fill")
                 }
-                Text(isPulling ? "Pulling..." : "Pull Update")
+                Text(pullLabel ?? (isPulling ? "Pulling..." : "Pull Update"))
               }
               .font(.caption.bold())
               .frame(maxWidth: .infinity)
@@ -972,6 +1018,56 @@ private struct RepoCard: View {
     case "lobs-mobile": return "iphone"
     default: return "folder.fill"
     }
+  }
+}
+
+private struct SelfUpdateResultBanner: View {
+  let result: SelfUpdateResponse
+  let onRelaunch: () -> Void
+  
+  var body: some View {
+    HStack(spacing: 8) {
+      Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+        .foregroundStyle(result.success ? .green : .red)
+      
+      VStack(alignment: .leading, spacing: 2) {
+        Text(result.success ? "Mission Control updated" : "Update failed")
+          .font(.caption.bold())
+        
+        if let newCommit = result.newCommit {
+          Text("Now at \(newCommit)")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        
+        if !result.success {
+          Text(result.buildOutput.isEmpty ? result.pullOutput : result.buildOutput)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(3)
+        }
+      }
+      
+      Spacer()
+      
+      if result.success {
+        Button {
+          onRelaunch()
+        } label: {
+          Label("Relaunch", systemImage: "arrow.clockwise.circle.fill")
+            .font(.caption.bold())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.green.opacity(0.2))
+            .foregroundStyle(.green)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+      }
+    }
+    .padding(12)
+    .background((result.success ? Color.green : Color.red).opacity(0.1))
+    .clipShape(RoundedRectangle(cornerRadius: 8))
   }
 }
 

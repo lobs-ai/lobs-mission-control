@@ -1886,6 +1886,13 @@ final class APIService {
     )
   }
   
+  func selfUpdateMissionControl() async throws -> SelfUpdateResponse {
+    return try await request(
+      method: "POST",
+      path: "/api/status/updates/self-update"
+    )
+  }
+  
   func pauseOrchestrator() async throws {
     try await requestVoid(
       method: "POST",
