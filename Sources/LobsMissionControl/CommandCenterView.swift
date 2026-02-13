@@ -21,6 +21,8 @@ struct CommandCenterView: View {
   @State private var upcomingEvents: [ScheduledEvent] = []
   @State private var recentMemories: [MemoryItem] = []
   @State private var showNewTaskSheet = false
+  @State private var showAIUsage = false
+  @State private var showDetailedStats = false
   
   private var lastVisit: Date {
     Date(timeIntervalSince1970: lastVisitTimestamp)
@@ -85,6 +87,14 @@ struct CommandCenterView: View {
       .filter { $0.status == "working" || $0.status == "thinking" }
       .map { $0.agentType }
       .sorted()
+  }
+  
+  // Completion rate (all-time)
+  private var completionRate: Double {
+    let completable = vm.tasks.filter { $0.status == .completed || $0.status == .active || $0.status == .waitingOn }
+    guard !completable.isEmpty else { return 0 }
+    let completed = completable.filter { $0.status == .completed }.count
+    return Double(completed) / Double(completable.count)
   }
   
   var body: some View {
@@ -209,8 +219,27 @@ struct CommandCenterView: View {
             memories: recentMemories,
             onViewAll: { onOpenMemory?() }
           )
+          
+          // AI Usage
+          AIUsageCard(
+            workerHistory: vm.workerHistory,
+            mainSessionUsage: vm.mainSessionUsage,
+            onViewDetails: { showAIUsage = true }
+          )
+          
+          // Analytics
+          AnalyticsCard(
+            tasksCount: vm.tasks.count,
+            completionRate: completionRate,
+            onViewDetails: { showDetailedStats = true }
+          )
           }
           .padding(.horizontal, 24)
+          
+          // Velocity Chart (full-width below grid)
+          VelocityChartView(tasks: vm.tasks)
+            .padding(.horizontal, 24)
+          
           .padding(.bottom, 28)
         }
       }
@@ -243,6 +272,14 @@ struct CommandCenterView: View {
     }
     .sheet(isPresented: $showNewTaskSheet) {
       NewTaskSheet(vm: vm, isPresented: $showNewTaskSheet)
+    }
+    .sheet(isPresented: $showAIUsage) {
+      AIUsageView(vm: vm, isPresented: $showAIUsage)
+        .frame(width: 900, height: 700)
+    }
+    .sheet(isPresented: $showDetailedStats) {
+      DetailedStatsView(tasks: vm.tasks, projects: vm.sortedActiveProjects)
+        .frame(width: 1200, height: 800)
     }
   }
   
@@ -1052,6 +1089,159 @@ private struct QuickActionButton: View {
       )
     }
     .buttonStyle(.plain)
+  }
+}
+
+// MARK: - AI Usage Card
+
+private struct AIUsageCard: View {
+  let workerHistory: WorkerHistory?
+  let mainSessionUsage: MainSessionUsage?
+  let onViewDetails: () -> Void
+  
+  private var totalCost: Double {
+    let workerCost = workerHistory?.runs.reduce(into: 0.0) { sum, run in
+      sum += run.totalCostUSD ?? 0
+    } ?? 0
+    let mainCost = mainSessionUsage?.dailySummaries.values.reduce(into: 0.0) { sum, daily in
+      sum += daily.costUSD
+    } ?? 0
+    return workerCost + mainCost
+  }
+  
+  private var totalTokens: Int {
+    let workerTokens = workerHistory?.runs.reduce(into: 0) { sum, run in
+      sum += (run.inputTokens ?? 0) + (run.outputTokens ?? 0)
+    } ?? 0
+    let mainTokens = mainSessionUsage?.dailySummaries.values.reduce(into: 0) { sum, daily in
+      sum += daily.inputTokens + daily.outputTokens
+    } ?? 0
+    return workerTokens + mainTokens
+  }
+  
+  private var recentRuns: Int {
+    workerHistory?.runs.filter { run in
+      guard let ended = run.endedAt else { return false }
+      return ended > Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date.distantPast
+    }.count ?? 0
+  }
+  
+  var body: some View {
+    HomeCardContainer {
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Image(systemName: "chart.line.uptrend.xyaxis")
+            .font(.title3)
+            .foregroundStyle(.cyan)
+          Text("AI Usage")
+            .font(.headline)
+          
+          Spacer()
+          
+          Text("$\(totalCost, specifier: "%.2f")")
+            .font(.title2.bold())
+            .foregroundStyle(.cyan)
+        }
+        
+        VStack(alignment: .leading, spacing: 8) {
+          HStack {
+            Text("Total Tokens")
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Text("\(totalTokens / 1000)K")
+              .font(.caption.bold())
+          }
+          
+          HStack {
+            Text("Worker Runs (7d)")
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Text("\(recentRuns)")
+              .font(.caption.bold())
+          }
+        }
+        
+        Divider()
+        Button {
+          onViewDetails()
+        } label: {
+          HStack {
+            Text("View details")
+              .font(.caption.bold())
+            Spacer()
+            Image(systemName: "arrow.right")
+              .font(.caption)
+          }
+          .foregroundStyle(.cyan)
+        }
+        .buttonStyle(.plain)
+      }
+    }
+  }
+}
+
+// MARK: - Analytics Card
+
+private struct AnalyticsCard: View {
+  let tasksCount: Int
+  let completionRate: Double
+  let onViewDetails: () -> Void
+  
+  var body: some View {
+    HomeCardContainer {
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Image(systemName: "chart.bar.xaxis")
+            .font(.title3)
+            .foregroundStyle(.purple)
+          Text("Analytics")
+            .font(.headline)
+          
+          Spacer()
+          
+          Text("\(Int(completionRate * 100))%")
+            .font(.title2.bold())
+            .foregroundStyle(.purple)
+        }
+        
+        VStack(alignment: .leading, spacing: 8) {
+          HStack {
+            Text("Total Tasks")
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Text("\(tasksCount)")
+              .font(.caption.bold())
+          }
+          
+          HStack {
+            Text("Completion Rate")
+              .font(.subheadline)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Text("\(Int(completionRate * 100))%")
+              .font(.caption.bold())
+          }
+        }
+        
+        Divider()
+        Button {
+          onViewDetails()
+        } label: {
+          HStack {
+            Text("Detailed statistics")
+              .font(.caption.bold())
+            Spacer()
+            Image(systemName: "arrow.right")
+              .font(.caption)
+          }
+          .foregroundStyle(.purple)
+        }
+        .buttonStyle(.plain)
+      }
+    }
   }
 }
 
