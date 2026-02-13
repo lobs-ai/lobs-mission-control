@@ -1899,6 +1899,7 @@ final class AppViewModel: ObservableObject {
         let thread = try await api.saveInboxResponse(docId: docId, response: response)
         await MainActor.run {
           self.inboxThreadsByDocId[docId] = thread
+          self.flashSuccess("Response sent")
         }
       } catch {
         await MainActor.run {
@@ -2611,6 +2612,7 @@ final class AppViewModel: ObservableObject {
       do {
         try await api.deleteTask(taskId: taskId)
         cache.invalidateTasks()
+        await MainActor.run { self.flashSuccess("Task deleted") }
       } catch {
         await MainActor.run {
           self.flashError("Failed to delete task: \(error.localizedDescription)")
@@ -2776,6 +2778,7 @@ final class AppViewModel: ObservableObject {
 
         // Delete the project entry itself
         try await api.deleteProject(id: id)
+        await MainActor.run { self.flashSuccess("Project deleted") }
       } catch {
         await MainActor.run {
           self.flashError("Failed to delete project: \(error.localizedDescription)")
@@ -2799,6 +2802,7 @@ final class AppViewModel: ObservableObject {
     Task {
       do {
         try await api.archiveProject(id: id)
+        await MainActor.run { self.flashSuccess("Project archived") }
       } catch {
         await MainActor.run {
           self.flashError("Failed to archive project: \(error.localizedDescription)")
@@ -3669,6 +3673,7 @@ final class AppViewModel: ObservableObject {
       }
     } catch {
       print("⚠️ Failed to load inbox items: \(error)")
+      await MainActor.run { self.flashError("Failed to load inbox: \(error.localizedDescription)") }
     }
   }
 
@@ -3718,6 +3723,7 @@ final class AppViewModel: ObservableObject {
       }
     } catch {
       print("⚠️ Failed to load agent documents: \(error)")
+      await MainActor.run { self.flashError("Failed to load documents: \(error.localizedDescription)") }
     }
   }
 
