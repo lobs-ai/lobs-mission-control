@@ -15,7 +15,7 @@ final class MemoryViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var error: String? = nil
     
-    private let apiService: APIService
+    let apiService: APIService
     
     init(apiService: APIService) {
         self.apiService = apiService
@@ -166,6 +166,52 @@ final class MemoryViewModel: ObservableObject {
             if let item = memories.first(where: { $0.id == created.id }) {
                 await selectMemory(item)
             }
+            
+            isLoading = false
+        } catch {
+            self.error = error.localizedDescription
+            isLoading = false
+        }
+    }
+    
+    // MARK: - Delete Memory
+    
+    func deleteMemory(id: Int) async {
+        isLoading = true
+        error = nil
+        
+        do {
+            try await apiService.deleteMemory(id: id)
+            
+            // Clear selection if we deleted the selected memory
+            if selectedMemory?.id == id {
+                selectedMemory = nil
+            }
+            
+            // Reload the list
+            await loadMemories()
+            
+            isLoading = false
+        } catch {
+            self.error = error.localizedDescription
+            isLoading = false
+        }
+    }
+    
+    // MARK: - Sync Memories
+    
+    func syncMemories() async {
+        isLoading = true
+        error = nil
+        
+        do {
+            let result = try await apiService.syncMemories()
+            
+            // Reload after sync
+            await loadMemories()
+            
+            // Show a brief success message (you can enhance this with a toast)
+            print("Sync complete: \(result.new) new, \(result.updated) updated")
             
             isLoading = false
         } catch {

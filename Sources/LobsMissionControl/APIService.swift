@@ -630,6 +630,83 @@ final class APIService {
     )
   }
   
+  func createDocument(title: String, content: String, source: String?, topic: String?) async throws -> AgentDocument {
+    struct DocumentCreate: Codable {
+      let id: String
+      let title: String
+      let content: String?
+      let source: String?
+      let topic: String?
+      let filename: String
+      let relativePath: String
+      let contentIsTruncated: Bool
+      let date: Date
+      let isRead: Bool
+    }
+    
+    // Generate a unique ID for the document
+    let timestamp = ISO8601DateFormatter().string(from: Date())
+    let sanitizedTitle = title.replacingOccurrences(of: " ", with: "-")
+      .replacingOccurrences(of: "/", with: "-")
+      .lowercased()
+    let id = "\(sanitizedTitle)-\(UUID().uuidString.prefix(8))"
+    let filename = "\(id).md"
+    let relativePath = topic != nil ? "research/\(topic!)/\(filename)" : "reports/pending/\(filename)"
+    
+    let create = DocumentCreate(
+      id: id,
+      title: title,
+      content: content,
+      source: source,
+      topic: topic,
+      filename: filename,
+      relativePath: relativePath,
+      contentIsTruncated: false,
+      date: Date(),
+      isRead: false
+    )
+    
+    return try await request(
+      method: "POST",
+      path: "/api/documents",
+      body: create
+    )
+  }
+  
+  func updateDocument(id: String, title: String?, content: String?, topic: String?) async throws -> AgentDocument {
+    struct DocumentUpdate: Codable {
+      let title: String?
+      let content: String?
+      let topic: String?
+    }
+    
+    let update = DocumentUpdate(
+      title: title,
+      content: content,
+      topic: topic
+    )
+    
+    return try await request(
+      method: "PUT",
+      path: "/api/documents/\(id)",
+      body: update
+    )
+  }
+  
+  func deleteDocument(id: String) async throws {
+    try await requestVoid(
+      method: "DELETE",
+      path: "/api/documents/\(id)"
+    )
+  }
+  
+  func archiveDocument(id: String) async throws -> AgentDocument {
+    return try await request(
+      method: "POST",
+      path: "/api/documents/\(id)/archive"
+    )
+  }
+  
   // MARK: - Worker Status
   
   func loadWorkerStatus() async throws -> WorkerStatus? {
@@ -1700,6 +1777,13 @@ final class APIService {
     return try await request(
       method: "POST",
       path: path
+    )
+  }
+  
+  func deleteMemory(id: Int) async throws {
+    try await requestVoid(
+      method: "DELETE",
+      path: "/api/memories/\(id)"
     )
   }
   

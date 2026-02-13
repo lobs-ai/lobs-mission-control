@@ -4,6 +4,10 @@ struct MemoryView: View {
     @StateObject var viewModel: MemoryViewModel
     @State private var showQuickCapture = true
     @State private var selectedTab: FilterTab = .all
+    @State private var showSearch = false
+    @State private var showTimeline = false
+    @State private var showNewMemory = false
+    @State private var showDeleteConfirmation = false
     
     enum FilterTab: String, CaseIterable {
         case all = "All"
@@ -23,45 +27,129 @@ struct MemoryView: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            // Left column: Memory list
+            // Left column: Memory list or search/timeline
             VStack(spacing: 0) {
-                // Filter tabs
-                HStack(spacing: 4) {
-                    ForEach(FilterTab.allCases, id: \.self) { tab in
+                // Top bar with tabs and action buttons
+                HStack(spacing: 8) {
+                    if !showSearch {
+                        // Filter tabs
+                        HStack(spacing: 4) {
+                            ForEach(FilterTab.allCases, id: \.self) { tab in
+                                Button {
+                                    selectedTab = tab
+                                    viewModel.filterType = tab.filterValue
+                                    Task {
+                                        await viewModel.loadMemories()
+                                    }
+                                } label: {
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .regular))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
+                                        .foregroundStyle(selectedTab == tab ? Color.accentColor : .secondary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // Action buttons
+                    HStack(spacing: 4) {
+                        // Search toggle
                         Button {
-                            selectedTab = tab
-                            viewModel.filterType = tab.filterValue
-                            Task {
-                                await viewModel.loadMemories()
+                            showSearch.toggle()
+                            if !showSearch {
+                                viewModel.searchQuery = ""
+                                viewModel.searchResults = []
                             }
                         } label: {
-                            Text(tab.rawValue)
-                                .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .regular))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
-                                .foregroundStyle(selectedTab == tab ? Color.accentColor : .secondary)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            Image(systemName: showSearch ? "xmark" : "magnifyingglass")
+                                .font(.system(size: 12))
+                                .frame(width: 24, height: 24)
                         }
                         .buttonStyle(.plain)
+                        .help(showSearch ? "Close search" : "Search memories")
+                        
+                        // Timeline toggle (only when not in search mode)
+                        if !showSearch {
+                            Button {
+                                showTimeline.toggle()
+                            } label: {
+                                Image(systemName: showTimeline ? "list.bullet" : "calendar")
+                                    .font(.system(size: 12))
+                                    .frame(width: 24, height: 24)
+                            }
+                            .buttonStyle(.plain)
+                            .help(showTimeline ? "Show list view" : "Show timeline view")
+                        }
+                        
+                        // Sync button
+                        Button {
+                            Task {
+                                await viewModel.syncMemories()
+                            }
+                        } label: {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 12))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Sync memories from disk")
+                        
+                        // New memory button
+                        Button {
+                            showNewMemory = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 12))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Create new memory")
                     }
-                    Spacer()
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 
                 Divider()
                 
-                // Memory list
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(viewModel.filteredMemories) { item in
-                            MemoryListItem(
-                                item: item,
-                                isSelected: viewModel.selectedMemory?.id == item.id
-                            ) {
-                                Task {
-                                    await viewModel.selectMemory(item)
+                // Content: Search, Timeline, or List
+                if showSearch {
+                    MemorySearchView(viewModel: viewModel) { result in
+                        // When a search result is clicked, load that memory
+                        Task {
+                            if let item = viewModel.memories.first(where: { $0.id == result.id }) {
+                                await viewModel.selectMemory(item)
+                            } else {
+                                // If not in current list, fetch directly
+                                let detail = try? await viewModel.apiService.fetchMemory(id: result.id)
+                                viewModel.selectedMemory = detail
+                            }
+                            showSearch = false
+                        }
+                    }
+                } else if showTimeline {
+                    MemoryTimelineView(viewModel: viewModel) { item in
+                        Task {
+                            await viewModel.selectMemory(item)
+                        }
+                    }
+                } else {
+                    // Memory list
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(viewModel.filteredMemories) { item in
+                                MemoryListItem(
+                                    item: item,
+                                    isSelected: viewModel.selectedMemory?.id == item.id
+                                ) {
+                                    Task {
+                                        await viewModel.selectMemory(item)
+                                    }
                                 }
                             }
                         }
@@ -87,6 +175,8 @@ struct MemoryView: View {
                                 Text(memory.displayTitle)
                                     .font(.title2.weight(.bold))
                                 Spacer()
+                                
+                                // Edit button
                                 Button {
                                     viewModel.startEditing()
                                 } label: {
@@ -95,6 +185,17 @@ struct MemoryView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .help("Edit memory")
+                                
+                                // Delete button
+                                Button {
+                                    showDeleteConfirmation = true
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.body)
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Delete memory")
                             }
                         }
                         
@@ -280,6 +381,23 @@ struct MemoryView: View {
         .task {
             await viewModel.loadMemories()
         }
+        .sheet(isPresented: $showNewMemory) {
+            NewMemorySheet(viewModel: viewModel, isPresented: $showNewMemory)
+        }
+        .alert("Delete Memory?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let memory = viewModel.selectedMemory {
+                    Task {
+                        await viewModel.deleteMemory(id: memory.id)
+                    }
+                }
+            }
+        } message: {
+            if let memory = viewModel.selectedMemory {
+                Text("Are you sure you want to delete '\(memory.title)'? This cannot be undone.")
+            }
+        }
         .overlay {
             if viewModel.isLoading {
                 ProgressView()
@@ -297,6 +415,104 @@ struct MemoryView: View {
                 Text(error)
             }
         }
+    }
+}
+
+// MARK: - New Memory Sheet
+
+struct NewMemorySheet: View {
+    @ObservedObject var viewModel: MemoryViewModel
+    @Binding var isPresented: Bool
+    
+    @State private var title: String = ""
+    @State private var content: String = ""
+    @State private var memoryType: String = "custom"
+    @State private var useDate: Bool = false
+    @State private var selectedDate: Date = Date()
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("New Memory")
+                .font(.title2.weight(.bold))
+            
+            VStack(alignment: .leading, spacing: 12) {
+                // Title
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Title")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    TextField("Enter title...", text: $title)
+                        .textFieldStyle(.roundedBorder)
+                }
+                
+                // Type picker
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Type")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Picker("Type", selection: $memoryType) {
+                        Text("Long-term").tag("long_term")
+                        Text("Daily").tag("daily")
+                        Text("Custom").tag("custom")
+                    }
+                    .pickerStyle(.segmented)
+                }
+                
+                // Date picker (optional)
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Include date", isOn: $useDate)
+                        .font(.caption.weight(.semibold))
+                    
+                    if useDate {
+                        DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
+                            .datePickerStyle(.compact)
+                    }
+                }
+                
+                // Content
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Content")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    TextEditor(text: $content)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(height: 200)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                        )
+                }
+            }
+            .padding()
+            
+            Spacer()
+            
+            // Action buttons
+            HStack {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Button("Create") {
+                    Task {
+                        await viewModel.createMemory(
+                            title: title,
+                            content: content,
+                            type: memoryType,
+                            date: useDate ? selectedDate : nil
+                        )
+                        isPresented = false
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(title.isEmpty || content.isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 500, height: 550)
     }
 }
 
