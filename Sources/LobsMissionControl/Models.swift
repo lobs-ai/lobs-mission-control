@@ -924,12 +924,14 @@ enum TrackerEntryType: String, Codable, Hashable, CaseIterable {
   case workSession = "work_session"
   case deadline = "deadline"
   case note = "note"
+  case analysis = "analysis"
   
   var displayName: String {
     switch self {
     case .workSession: return "Work Session"
     case .deadline: return "Deadline"
     case .note: return "Note"
+    case .analysis: return "AI Analysis"
     }
   }
   
@@ -938,6 +940,7 @@ enum TrackerEntryType: String, Codable, Hashable, CaseIterable {
     case .workSession: return "clock.fill"
     case .deadline: return "calendar.badge.exclamationmark"
     case .note: return "note.text"
+    case .analysis: return "brain.head.profile"
     }
   }
 }

@@ -37,16 +37,19 @@ struct WorkTrackerView: View {
         .padding(.horizontal, 20)
         .padding(.top, 12)
         
-        // 1. RECOMMENDATIONS & WHAT TO DO NEXT
+        // 1. AI ANALYSIS
+        AIAnalysisSection(vm: vm)
+        
+        // 2. RECOMMENDATIONS & WHAT TO DO NEXT
         RecommendationsSection(vm: vm)
         
-        // 2. QUICK ENTRY TEXT BOX
+        // 3. QUICK ENTRY TEXT BOX
         QuickEntrySection(vm: vm)
         
-        // 3. STATS CARDS
+        // 4. STATS CARDS
         StatsSection(vm: vm)
         
-        // 4. RECENT ENTRIES / HISTORY
+        // 5. RECENT ENTRIES / HISTORY
         RecentHistorySection(vm: vm)
       }
       .padding(.bottom, 20)
@@ -58,7 +61,133 @@ struct WorkTrackerView: View {
   }
 }
 
-// MARK: - 1. Recommendations Section
+// MARK: - 1. AI Analysis Section
+
+private struct AIAnalysisSection: View {
+  @ObservedObject var vm: AppViewModel
+  
+  var body: some View {
+    if let analysis = vm.trackerAnalysis {
+      VStack(alignment: .leading, spacing: 12) {
+        HStack(spacing: 8) {
+          Image(systemName: "brain.head.profile")
+            .font(.callout)
+            .foregroundStyle(.linearGradient(
+              colors: [.purple, .pink],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            ))
+          Text("AI Analysis")
+            .font(.headline)
+            .foregroundStyle(.secondary)
+          
+          Spacer()
+          
+          // Timestamp
+          if analysis.updatedAt.timeIntervalSinceNow > -3600 {
+            Text(relativeTime(analysis.updatedAt))
+              .font(.caption)
+              .foregroundStyle(.tertiary)
+          } else {
+            Text(absoluteTime(analysis.updatedAt))
+              .font(.caption)
+              .foregroundStyle(.tertiary)
+          }
+        }
+        .padding(.horizontal, 20)
+        
+        // Analysis content card
+        VStack(alignment: .leading, spacing: 10) {
+          // Markdown-style text rendering
+          Text(analysis.rawText)
+            .font(.system(size: 13, design: .default))
+            .foregroundStyle(.primary)
+            .lineSpacing(4)
+            .textSelection(.enabled)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+          LinearGradient(
+            colors: [
+              Color.purple.opacity(0.05),
+              Color.pink.opacity(0.03)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: 12)
+            .stroke(
+              LinearGradient(
+                colors: [
+                  Color.purple.opacity(0.2),
+                  Color.pink.opacity(0.1)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              ),
+              lineWidth: 1
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 20)
+      }
+    } else {
+      // No analysis yet - subtle placeholder
+      VStack(spacing: 8) {
+        HStack(spacing: 8) {
+          Image(systemName: "brain.head.profile")
+            .font(.callout)
+            .foregroundStyle(.tertiary)
+          Text("AI Analysis")
+            .font(.headline)
+            .foregroundStyle(.secondary)
+          Spacer()
+        }
+        .padding(.horizontal, 20)
+        
+        HStack(spacing: 8) {
+          Image(systemName: "sparkles")
+            .font(.footnote)
+            .foregroundStyle(.quaternary)
+          Text("No analysis available yet")
+            .font(.footnote)
+            .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 20)
+      }
+    }
+  }
+  
+  private func relativeTime(_ date: Date) -> String {
+    let seconds = abs(date.timeIntervalSinceNow)
+    if seconds < 60 {
+      return "just now"
+    } else if seconds < 3600 {
+      let minutes = Int(seconds / 60)
+      return "\(minutes)m ago"
+    } else {
+      let hours = Int(seconds / 3600)
+      return "\(hours)h ago"
+    }
+  }
+  
+  private func absoluteTime(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .short
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
+  }
+}
+
+// MARK: - 2. Recommendations Section
 
 private struct RecommendationsSection: View {
   @ObservedObject var vm: AppViewModel
@@ -239,7 +368,7 @@ private struct UrgentDeadlineCard: View {
   }
 }
 
-// MARK: - 2. Quick Entry Section
+// MARK: - 3. Quick Entry Section
 
 private struct QuickEntrySection: View {
   @ObservedObject var vm: AppViewModel
@@ -348,7 +477,7 @@ private struct QuickEntrySection: View {
   }
 }
 
-// MARK: - 3. Stats Section
+// MARK: - 4. Stats Section
 
 private struct StatsSection: View {
   @ObservedObject var vm: AppViewModel
@@ -477,7 +606,7 @@ private struct CompactStatCard: View {
   }
 }
 
-// MARK: - 4. Recent History Section
+// MARK: - 5. Recent History Section
 
 private struct RecentHistorySection: View {
   @ObservedObject var vm: AppViewModel

@@ -236,6 +236,7 @@ final class AppViewModel: ObservableObject {
   @Published var trackerEntries: [TrackerEntry] = []
   @Published var trackerSummary: TrackerSummary?
   @Published var upcomingDeadlines: [DeadlineEntry] = []
+  @Published var trackerAnalysis: TrackerEntry?
 
   // Inbox (Design Docs)
   @Published var inboxItems: [InboxItem] = []
@@ -1755,11 +1756,13 @@ final class AppViewModel: ObservableObject {
         let entries = try await api.loadTrackerEntries()
         let summary = try await api.loadTrackerSummary()
         let deadlines = try await api.loadDeadlines(upcoming: true)
+        let analysis = try? await api.fetchTrackerAnalysis()
         
         await MainActor.run {
           self.trackerEntries = entries
           self.trackerSummary = summary
           self.upcomingDeadlines = deadlines
+          self.trackerAnalysis = analysis
         }
       } catch {
         await MainActor.run {

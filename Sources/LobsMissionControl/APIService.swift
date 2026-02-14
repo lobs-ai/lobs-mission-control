@@ -1713,6 +1713,59 @@ final class APIService {
     )
   }
   
+  func fetchTrackerAnalysis() async throws -> TrackerEntry? {
+    // The endpoint returns TrackerEntry or null (200 with null body)
+    // We need to handle the nullable response manually
+    var urlComponents = URLComponents(url: baseURL.appendingPathComponent("/api/tracker/analysis/latest"), resolvingAgainstBaseURL: false)!
+    
+    guard let url = urlComponents.url else {
+      throw APIError.invalidURL
+    }
+    
+    var req = URLRequest(url: url)
+    req.httpMethod = "GET"
+    req.setValue("application/json", forHTTPHeaderField: "Accept")
+    
+    if let token = apiToken {
+      req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+    
+    let (data, response): (Data, URLResponse)
+    do {
+      (data, response) = try await URLSession.shared.data(for: req)
+    } catch let error as URLError {
+      if error.code == .cannotConnectToHost || error.code == .cannotFindHost {
+        throw APIError.connectionError(message: "Cannot connect to server. Check that lobs-server is running.")
+      } else if error.code == .timedOut {
+        throw APIError.timeout(message: "Request timed out")
+      } else {
+        throw APIError.networkError(error)
+      }
+    }
+    
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw APIError.invalidResponse
+    }
+    
+    guard (200..<300).contains(httpResponse.statusCode) else {
+      throw APIError.parseErrorResponse(data, statusCode: httpResponse.statusCode)
+    }
+    
+    // Handle null response (no analysis yet)
+    if data.count <= 4 { // "null" is 4 bytes
+      let nullCheck = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+      if nullCheck == "null" || nullCheck == "" {
+        return nil
+      }
+    }
+    
+    do {
+      return try decoder().decode(TrackerEntry.self, from: data)
+    } catch {
+      throw APIError.decodingError(error)
+    }
+  }
+  
   // MARK: - Inbox Read State
   
   func loadInboxReadState() throws -> InboxReadStateFile? {
