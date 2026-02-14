@@ -845,28 +845,130 @@ private struct UpdatesSection: View {
     selfUpdateResult = nil
     defer { isSelfUpdating = false }
     
-    do {
-      let result = try await apiService.selfUpdateMissionControl()
-      selfUpdateResult = result
-      if result.success {
-        // Refresh update check
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        let check = try await apiService.checkForUpdates()
-        updateInfo = check.repos.first(where: { $0.name == "lobs-mission-control" })
-      }
-    } catch {
+    // Find the repo directory
+    guard let repoPath = findRepoDirectory() else {
       selfUpdateResult = SelfUpdateResponse(
-        success: false, pullOutput: error.localizedDescription,
-        buildOutput: "", newCommit: nil, binaryPath: nil
+        success: false,
+        pullOutput: "Could not find Mission Control repository directory",
+        buildOutput: "",
+        newCommit: nil,
+        binaryPath: nil
+      )
+      return
+    }
+    
+    // Run git pull
+    let pullOutput = await runCommand("/usr/bin/git", args: ["pull", "--rebase", "origin", "main"], workDir: repoPath)
+    guard pullOutput.exitCode == 0 else {
+      selfUpdateResult = SelfUpdateResponse(
+        success: false,
+        pullOutput: pullOutput.output,
+        buildOutput: "",
+        newCommit: nil,
+        binaryPath: nil
+      )
+      return
+    }
+    
+    // Get new commit hash
+    let commitOutput = await runCommand("/usr/bin/git", args: ["rev-parse", "--short", "HEAD"], workDir: repoPath)
+    let newCommit = commitOutput.exitCode == 0 ? commitOutput.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+    
+    // Build - use bin/build if it exists, otherwise swift build
+    let buildScript = repoPath.appendingPathComponent("bin/build")
+    let buildOutput: CommandOutput
+    if FileManager.default.fileExists(atPath: buildScript.path) {
+      buildOutput = await runCommand(buildScript.path, args: [], workDir: repoPath)
+    } else {
+      buildOutput = await runCommand("/usr/bin/swift", args: ["build"], workDir: repoPath)
+    }
+    
+    if buildOutput.exitCode == 0 {
+      let binaryPath = repoPath.appendingPathComponent(".build/debug/lobs-mission-control").path
+      selfUpdateResult = SelfUpdateResponse(
+        success: true,
+        pullOutput: pullOutput.output,
+        buildOutput: buildOutput.output,
+        newCommit: newCommit,
+        binaryPath: binaryPath
+      )
+      // Refresh update check
+      try? await Task.sleep(nanoseconds: 500_000_000)
+      let check = try? await apiService.checkForUpdates()
+      updateInfo = check?.repos.first(where: { $0.name == "lobs-mission-control" })
+    } else {
+      selfUpdateResult = SelfUpdateResponse(
+        success: false,
+        pullOutput: pullOutput.output,
+        buildOutput: buildOutput.output,
+        newCommit: newCommit,
+        binaryPath: nil
       )
     }
+  }
+  
+  /// Find the Mission Control repo directory by walking up from the executable
+  private func findRepoDirectory() -> URL? {
+    // Start from executable and walk up to find .git
+    if let executableURL = Bundle.main.executableURL {
+      var currentURL = executableURL.deletingLastPathComponent()
+      for _ in 0..<10 {  // Safety limit
+        let gitDir = currentURL.appendingPathComponent(".git")
+        if FileManager.default.fileExists(atPath: gitDir.path) {
+          return currentURL
+        }
+        currentURL = currentURL.deletingLastPathComponent()
+      }
+    }
+    
+    // Fall back to well-known location
+    let fallbackPath = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("lobs-mission-control")
+    let gitDir = fallbackPath.appendingPathComponent(".git")
+    if FileManager.default.fileExists(atPath: gitDir.path) {
+      return fallbackPath
+    }
+    
+    return nil
+  }
+  
+  /// Run a shell command and capture output
+  private func runCommand(_ executable: String, args: [String], workDir: URL) async -> CommandOutput {
+    return await withCheckedContinuation { continuation in
+      let process = Process()
+      let pipe = Pipe()
+      
+      process.executableURL = URL(fileURLWithPath: executable)
+      process.arguments = args
+      process.currentDirectoryURL = workDir
+      process.standardOutput = pipe
+      process.standardError = pipe
+      
+      do {
+        try process.run()
+        process.waitUntilExit()
+        
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        
+        continuation.resume(returning: CommandOutput(exitCode: Int(process.terminationStatus), output: output))
+      } catch {
+        continuation.resume(returning: CommandOutput(exitCode: -1, output: error.localizedDescription))
+      }
+    }
+  }
+  
+  private struct CommandOutput {
+    let exitCode: Int
+    let output: String
   }
   
   private func relaunchApp() {
     guard let binaryPath = selfUpdateResult?.binaryPath else { return }
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/sh")
-    process.arguments = ["-c", "sleep 1 && open \"\(binaryPath)\""]
+    // Launch the binary directly after a brief delay
+    process.arguments = ["-c", "sleep 1 && \"\(binaryPath)\" &"]
     try? process.run()
     NSApplication.shared.terminate(nil)
   }
