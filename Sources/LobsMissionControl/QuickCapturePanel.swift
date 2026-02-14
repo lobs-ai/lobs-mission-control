@@ -347,17 +347,13 @@ struct QuickCaptureView: View {
     let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
 
-    let prevProject = vm.selectedProjectId
-    vm.selectedProjectId = selectedProjectId
-
     vm.submitTaskToLobs(
       title: trimmed,
       notes: notes.isEmpty ? nil : notes,
       agent: "programmer",
+      projectId: selectedProjectId,
       autoPush: true
     )
-
-    vm.selectedProjectId = prevProject
 
     title = ""
     notes = ""

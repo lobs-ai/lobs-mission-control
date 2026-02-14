@@ -2635,7 +2635,7 @@ final class AppViewModel: ObservableObject {
     optimisticUpdate(taskId: id, localMutation: { $0.workState = newState }) { _ in }
   }
 
-  func submitTaskToLobs(title: String, notes: String?, agent: String?, autoPush: Bool) {
+  func submitTaskToLobs(title: String, notes: String?, agent: String?, projectId: String, autoPush: Bool) {
     let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let trimmedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedTitle.isEmpty else { return }
@@ -2652,7 +2652,7 @@ final class AppViewModel: ObservableObject {
       updatedAt: now,
       workState: .notStarted,
       reviewState: .approved,
-      projectId: selectedProjectId,
+      projectId: projectId,
       artifactPath: nil,
       notes: trimmedNotes,
       startedAt: now,
@@ -2680,7 +2680,7 @@ final class AppViewModel: ObservableObject {
           title: trimmedTitle,
           owner: .lobs,
           status: .active,
-          projectId: selectedProjectId,
+          projectId: projectId,
           workState: .notStarted,
           reviewState: .approved,
           notes: trimmedNotes,

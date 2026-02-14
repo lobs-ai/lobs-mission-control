@@ -2485,10 +2485,8 @@ struct AddTaskSheet: View {
               return
             }
 
-            let prevProject = vm.selectedProjectId
-            vm.selectedProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
-            vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, autoPush: autoPush)
-            if vm.showOverview { vm.selectedProjectId = prevProject }
+            let targetProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
+            vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, projectId: targetProjectId, autoPush: autoPush)
             dismiss()
           }
         )
@@ -2525,10 +2523,8 @@ struct AddTaskSheet: View {
             return
           }
 
-          let prevProject = vm.selectedProjectId
-          vm.selectedProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
-          vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, autoPush: autoPush)
-          if vm.showOverview { vm.selectedProjectId = prevProject }
+          let targetProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
+          vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, projectId: targetProjectId, autoPush: autoPush)
           dismiss()
         } label: {
           Text("Create Task")
