@@ -125,7 +125,8 @@ struct MainView: View {
                 },
                 onOpenWorkTracker: {
                     selectedSection = .workTracker
-                }
+                },
+                loadedMemories: memoryViewModel?.memories ?? []
             )
             .frame(width: 600, height: 400)
         }

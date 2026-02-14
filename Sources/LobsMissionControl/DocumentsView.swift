@@ -14,6 +14,7 @@ struct DocumentsView: View {
   @State private var expandedTopics: Set<String> = []
   @State private var showFollowUpSheet: Bool = false
   @AppStorage("documentsShowReadItems") private var showReadItems: Bool = true
+  @AppStorage("documentsShowStarredOnly") private var showStarredOnly: Bool = false
   @AppStorage("documentsGroupByTopic") private var groupByTopic: Bool = true
 
   // Topic groups for the sidebar
@@ -60,6 +61,11 @@ struct DocumentsView: View {
 
   private var filteredDocuments: [AgentDocument] {
     var docs = vm.agentDocuments
+
+    // Filter by starred status
+    if showStarredOnly {
+      docs = docs.filter { $0.isStarred }
+    }
 
     // Filter by read status
     if !showReadItems {
@@ -137,6 +143,17 @@ struct DocumentsView: View {
         .padding(.vertical, 6)
         .background(Color(NSColor.textBackgroundColor))
         .cornerRadius(6)
+
+        // Starred filter toggle
+        Toggle(isOn: $showStarredOnly) {
+          HStack(spacing: 4) {
+            Image(systemName: showStarredOnly ? "star.fill" : "star")
+            Text(showStarredOnly ? "All Docs" : "Starred")
+          }
+          .font(.system(size: 13))
+        }
+        .toggleStyle(.button)
+        .foregroundStyle(showStarredOnly ? .yellow : .primary)
 
         // Read filter toggle
         Toggle(isOn: $showReadItems) {
@@ -417,6 +434,12 @@ private struct DocumentListRow: View {
                 .fill(.purple)
                 .frame(width: 6, height: 6)
             }
+            
+            if doc.isStarred {
+              Image(systemName: "star.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(.yellow)
+            }
           }
           
           // Summary
@@ -502,6 +525,16 @@ private struct DocumentDetailView: View {
             .fontWeight(.bold)
 
           Spacer()
+
+          // Star/favorite toggle
+          Button {
+            vm.toggleDocumentStarred(doc)
+          } label: {
+            Image(systemName: doc.isStarred ? "star.fill" : "star")
+              .foregroundStyle(doc.isStarred ? .yellow : .secondary)
+          }
+          .buttonStyle(.plain)
+          .help(doc.isStarred ? "Remove from favorites" : "Add to favorites")
 
           // Mark read/unread toggle
           Button {

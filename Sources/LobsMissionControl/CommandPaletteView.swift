@@ -21,6 +21,9 @@ struct CommandPaletteView: View {
   var onOpenCalendar: (() -> Void)? = nil
   var onOpenWorkTracker: (() -> Void)? = nil
   
+  // Loaded memories from MemoryView (for local search)
+  var loadedMemories: [MemoryItem] = []
+  
   @State private var searchText = ""
   @State private var selectedIndex = 0
   @FocusState private var searchFieldFocused: Bool
@@ -556,7 +559,10 @@ struct CommandPaletteView: View {
   }
   
   private func memoryResults() -> [CommandResult] {
-    return memorySearchResults.map { memory in
+    var results: [CommandResult] = []
+    
+    // Include API search results (full text search via backend)
+    results.append(contentsOf: memorySearchResults.map { memory in
       CommandResult(
         id: "memory:\(memory.id)",
         icon: "brain.head.profile",
@@ -567,7 +573,33 @@ struct CommandPaletteView: View {
           onOpenMemory?()
         }
       )
+    })
+    
+    // Also include locally loaded memories (client-side fuzzy matching)
+    let q = queryText.lowercased()
+    let localMatches = loadedMemories.filter { memory in
+      q.isEmpty || 
+      memory.title.lowercased().contains(q) ||
+      memory.path.lowercased().contains(q) ||
+      memory.agent.lowercased().contains(q)
     }
+    
+    // Convert local matches to CommandResult, avoiding duplicates from API results
+    let apiResultIds = Set(memorySearchResults.map { $0.id })
+    results.append(contentsOf: localMatches.filter { !apiResultIds.contains($0.id) }.map { memory in
+      CommandResult(
+        id: "memory:\(memory.id)",
+        icon: "brain.head.profile",
+        title: memory.title,
+        subtitle: "\(memory.agent) • \(memory.memoryType)",
+        category: "Memories",
+        action: {
+          onOpenMemory?()
+        }
+      )
+    })
+    
+    return results
   }
   
   private func agentResults() -> [CommandResult] {

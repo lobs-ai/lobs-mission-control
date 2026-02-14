@@ -286,6 +286,14 @@ final class AppViewModel: ObservableObject {
     }
   }
   
+  @Published var starredDocumentIds: Set<String> = [] {
+    didSet {
+      var s = settings
+      s.starredDocumentIds = Array(starredDocumentIds)
+      settings = s
+    }
+  }
+  
   // Topics (Knowledge Organization)
   @Published var topics: [Topic] = []
 
@@ -573,6 +581,7 @@ final class AppViewModel: ObservableObject {
       readItemIds = Set(s.readInboxItemIds)
       lastSeenThreadCounts = s.lastSeenThreadCounts
       readDocumentIds = Set(s.readDocumentIds)
+      starredDocumentIds = Set(s.starredDocumentIds)
       reviewedDumpIds = Set(s.reviewedTextDumpIds)
       appearanceMode = s.appearanceMode
       quickCaptureHotkeyMode = s.quickCaptureHotkeyMode
@@ -1452,9 +1461,10 @@ final class AppViewModel: ObservableObject {
     Task {
       do {
         var docs = try await api.loadAgentDocuments()
-        // Apply read state
+        // Apply read state and starred state
         for i in docs.indices {
           docs[i].isRead = readDocumentIds.contains(docs[i].id)
+          docs[i].isStarred = starredDocumentIds.contains(docs[i].id)
         }
         await MainActor.run {
           self.agentDocuments = docs
@@ -1478,6 +1488,20 @@ final class AppViewModel: ObservableObject {
     readDocumentIds.remove(doc.id)
     if let idx = agentDocuments.firstIndex(where: { $0.id == doc.id }) {
       agentDocuments[idx].isRead = false
+    }
+  }
+  
+  func toggleDocumentStarred(_ doc: AgentDocument) {
+    if starredDocumentIds.contains(doc.id) {
+      starredDocumentIds.remove(doc.id)
+      if let idx = agentDocuments.firstIndex(where: { $0.id == doc.id }) {
+        agentDocuments[idx].isStarred = false
+      }
+    } else {
+      starredDocumentIds.insert(doc.id)
+      if let idx = agentDocuments.firstIndex(where: { $0.id == doc.id }) {
+        agentDocuments[idx].isStarred = true
+      }
     }
   }
   
@@ -3846,12 +3870,14 @@ final class AppViewModel: ObservableObject {
     do {
       var docs = try await api.loadAgentDocuments()
       
-      // Capture read state
+      // Capture read state and starred state
       let readIds = await readDocumentIds
+      let starredIds = await starredDocumentIds
       
-      // Apply read state
+      // Apply read state and starred state
       for i in docs.indices {
         docs[i].isRead = readIds.contains(docs[i].id)
+        docs[i].isStarred = starredIds.contains(docs[i].id)
       }
       
       await MainActor.run {

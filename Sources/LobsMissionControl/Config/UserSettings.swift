@@ -67,6 +67,9 @@ struct UserSettings: Codable {
     /// IDs of read document (report/research) items
     var readDocumentIds: [String]
 
+    /// IDs of starred/favorited documents
+    var starredDocumentIds: [String]
+
     /// IDs of reviewed text dumps
     var reviewedTextDumpIds: [String]
 
@@ -91,6 +94,7 @@ struct UserSettings: Codable {
         case lastSeenThreadCounts
         case inboxReadStateUpdatedAt
         case readDocumentIds
+        case starredDocumentIds
         case reviewedTextDumpIds
     }
 
@@ -121,6 +125,7 @@ struct UserSettings: Codable {
         lastSeenThreadCounts = try c.decodeIfPresent([String: Int].self, forKey: .lastSeenThreadCounts) ?? [:]
         inboxReadStateUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .inboxReadStateUpdatedAt)
         readDocumentIds = try c.decodeIfPresent([String].self, forKey: .readDocumentIds) ?? []
+        starredDocumentIds = try c.decodeIfPresent([String].self, forKey: .starredDocumentIds) ?? []
         reviewedTextDumpIds = try c.decodeIfPresent([String].self, forKey: .reviewedTextDumpIds) ?? []
     }
 
@@ -145,6 +150,7 @@ struct UserSettings: Codable {
         lastSeenThreadCounts: [String: Int] = [:],
         inboxReadStateUpdatedAt: Date? = nil,
         readDocumentIds: [String] = [],
+        starredDocumentIds: [String] = [],
         reviewedTextDumpIds: [String] = []
     ) {
         self.ownerFilter = ownerFilter
@@ -165,6 +171,7 @@ struct UserSettings: Codable {
         self.lastSeenThreadCounts = lastSeenThreadCounts
         self.inboxReadStateUpdatedAt = inboxReadStateUpdatedAt
         self.readDocumentIds = readDocumentIds
+        self.starredDocumentIds = starredDocumentIds
         self.reviewedTextDumpIds = reviewedTextDumpIds
     }
 }
