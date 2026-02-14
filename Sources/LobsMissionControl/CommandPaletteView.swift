@@ -618,9 +618,11 @@ struct CommandPaletteView: View {
   }
   
   private func documentResults() -> [CommandResult] {
-    let recentDocs = vm.agentDocuments.sorted { $0.date > $1.date }.prefix(20)
+    // Return ALL documents (sorted by date) so fuzzy search can find any document by title
+    // The fuzzy matching and result limiting (15 max) will filter to most relevant
+    let allDocs = vm.agentDocuments.sorted { $0.date > $1.date }
     
-    return recentDocs.map { doc in
+    return allDocs.map { doc in
       let icon: String
       switch doc.source {
       case .writer: icon = "doc.text"
