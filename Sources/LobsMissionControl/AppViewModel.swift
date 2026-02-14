@@ -582,7 +582,7 @@ final class AppViewModel: ObservableObject {
     startAutoRefreshIfNeeded()
 
     // Load documents immediately on launch (don't wait for first refresh)
-    if let repoURL {
+    if repoURL != nil {
       loadAgentDocuments()
       loadTopics()
       loadResearchRequests()

@@ -789,6 +789,7 @@ private struct CompactEntryRow: View {
     case .workSession: return .blue
     case .deadline: return .orange
     case .note: return .purple
+    case .analysis: return .mint
     }
   }
   

@@ -668,6 +668,9 @@ struct CommandPaletteView: View {
       case .note:
         icon = "note.text"
         typeLabel = "Note"
+      case .analysis:
+        icon = "brain.head.profile"
+        typeLabel = "Analysis"
       }
       
       let dateFormatter = RelativeDateTimeFormatter()
