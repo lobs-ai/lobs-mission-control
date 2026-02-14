@@ -1611,6 +1611,99 @@ final class APIService {
     )
   }
   
+  // MARK: - Work Tracker (Personal Productivity)
+  
+  func loadTrackerEntries(type: String? = nil, limit: Int = 100) async throws -> [TrackerEntry] {
+    var queryItems: [URLQueryItem] = [URLQueryItem(name: "limit", value: String(limit))]
+    if let type {
+      queryItems.append(URLQueryItem(name: "type", value: type))
+    }
+    return try await request(
+      method: "GET",
+      path: "/api/tracker/entries",
+      queryItems: queryItems
+    )
+  }
+  
+  func createTrackerEntry(type: TrackerEntryType, rawText: String, duration: Int? = nil, category: String? = nil, dueDate: Date? = nil, estimatedMinutes: Int? = nil) async throws -> TrackerEntry {
+    struct CreateTrackerEntry: Codable {
+      let id: String
+      let type: String
+      let rawText: String
+      let duration: Int?
+      let category: String?
+      let dueDate: Date?
+      let estimatedMinutes: Int?
+    }
+    
+    let body = CreateTrackerEntry(
+      id: UUID().uuidString.lowercased(),
+      type: type.rawValue,
+      rawText: rawText,
+      duration: duration,
+      category: category,
+      dueDate: dueDate,
+      estimatedMinutes: estimatedMinutes
+    )
+    
+    return try await request(
+      method: "POST",
+      path: "/api/tracker/entries",
+      body: body
+    )
+  }
+  
+  func updateTrackerEntry(id: String, type: TrackerEntryType? = nil, rawText: String? = nil, duration: Int? = nil, category: String? = nil, dueDate: Date? = nil, estimatedMinutes: Int? = nil) async throws -> TrackerEntry {
+    struct UpdateTrackerEntry: Codable {
+      let type: String?
+      let rawText: String?
+      let duration: Int?
+      let category: String?
+      let dueDate: Date?
+      let estimatedMinutes: Int?
+    }
+    
+    let body = UpdateTrackerEntry(
+      type: type?.rawValue,
+      rawText: rawText,
+      duration: duration,
+      category: category,
+      dueDate: dueDate,
+      estimatedMinutes: estimatedMinutes
+    )
+    
+    return try await request(
+      method: "PUT",
+      path: "/api/tracker/entries/\(id)",
+      body: body
+    )
+  }
+  
+  func deleteTrackerEntry(id: String) async throws {
+    try await requestVoid(
+      method: "DELETE",
+      path: "/api/tracker/entries/\(id)"
+    )
+  }
+  
+  func loadTrackerSummary() async throws -> TrackerSummary {
+    return try await request(
+      method: "GET",
+      path: "/api/tracker/summary"
+    )
+  }
+  
+  func loadDeadlines(upcoming: Bool = true, limit: Int = 50) async throws -> [DeadlineEntry] {
+    return try await request(
+      method: "GET",
+      path: "/api/tracker/deadlines",
+      queryItems: [
+        URLQueryItem(name: "upcoming", value: upcoming ? "true" : "false"),
+        URLQueryItem(name: "limit", value: String(limit))
+      ]
+    )
+  }
+  
   // MARK: - Inbox Read State
   
   func loadInboxReadState() throws -> InboxReadStateFile? {

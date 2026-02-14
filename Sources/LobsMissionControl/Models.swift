@@ -896,6 +896,62 @@ struct TrackerItem: Codable, Identifiable, Hashable {
   var updatedAt: Date
 }
 
+// MARK: - Work Tracker (Personal Productivity)
+
+struct TrackerEntry: Codable, Identifiable, Hashable {
+  var id: String
+  var type: TrackerEntryType  // work_session/deadline/note
+  var rawText: String
+  var duration: Int?  // minutes
+  var category: String?
+  var dueDate: Date?
+  var estimatedMinutes: Int?
+  var createdAt: Date
+  var updatedAt: Date
+}
+
+enum TrackerEntryType: String, Codable, Hashable, CaseIterable {
+  case workSession = "work_session"
+  case deadline = "deadline"
+  case note = "note"
+  
+  var displayName: String {
+    switch self {
+    case .workSession: return "Work Session"
+    case .deadline: return "Deadline"
+    case .note: return "Note"
+    }
+  }
+  
+  var icon: String {
+    switch self {
+    case .workSession: return "clock.fill"
+    case .deadline: return "calendar.badge.exclamationmark"
+    case .note: return "note.text"
+    }
+  }
+}
+
+struct TrackerSummary: Codable, Hashable {
+  var totalEntries: Int
+  var workSessionsCount: Int
+  var totalMinutesLogged: Int
+  var deadlinesCount: Int
+  var upcomingDeadlines: Int
+  var notesCount: Int
+  var categories: [String: Int]  // category -> count
+  var last7DaysMinutes: Int
+}
+
+struct DeadlineEntry: Codable, Identifiable, Hashable {
+  var id: String
+  var rawText: String
+  var category: String?
+  var dueDate: Date
+  var estimatedMinutes: Int?
+  var createdAt: Date
+}
+
 // MARK: - Notifications
 
 enum NotificationType: String, Codable {

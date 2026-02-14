@@ -6,6 +6,7 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
     case tasks = "Tasks"
     case memory = "Memory"
     case knowledge = "Knowledge"
+    case workTracker = "Work Tracker"
     case calendar = "Calendar"
     case inbox = "Inbox"
     case status = "Status"
@@ -20,6 +21,7 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
         case .tasks: return "checklist"
         case .memory: return "brain.head.profile"
         case .knowledge: return "books.vertical.fill"
+        case .workTracker: return "clock.badge.checkmark.fill"
         case .calendar: return "calendar"
         case .inbox: return "tray.fill"
         case .status: return "chart.bar.fill"
@@ -175,6 +177,10 @@ struct MainView: View {
         case .knowledge:
             TopicBrowserView(vm: vm, isPresented: $documentsPresented)
                 .navigationTitle("Knowledge")
+            
+        case .workTracker:
+            WorkTrackerView(vm: vm)
+                .navigationTitle("Work Tracker")
             
         case .calendar:
             if let apiService = vm.apiService {

@@ -231,6 +231,11 @@ final class AppViewModel: ObservableObject {
   // Tracker
   @Published var trackerItems: [TrackerItem] = []
   @Published var trackerRequests: [ResearchRequest] = []
+  
+  // Work Tracker (Personal Productivity)
+  @Published var trackerEntries: [TrackerEntry] = []
+  @Published var trackerSummary: TrackerSummary?
+  @Published var upcomingDeadlines: [DeadlineEntry] = []
 
   // Inbox (Design Docs)
   @Published var inboxItems: [InboxItem] = []
@@ -1737,6 +1742,84 @@ final class AppViewModel: ObservableObject {
       } catch {
         await MainActor.run {
           self.flashError("Failed to save tracker request: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+  
+  // MARK: - Work Tracker (Personal Productivity)
+  
+  func loadWorkTracker() {
+    Task {
+      do {
+        let entries = try await api.loadTrackerEntries()
+        let summary = try await api.loadTrackerSummary()
+        let deadlines = try await api.loadDeadlines(upcoming: true)
+        
+        await MainActor.run {
+          self.trackerEntries = entries
+          self.trackerSummary = summary
+          self.upcomingDeadlines = deadlines
+        }
+      } catch {
+        await MainActor.run {
+          self.flashError("Failed to load work tracker: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+  
+  func addWorkTrackerEntry(type: TrackerEntryType, rawText: String, duration: Int? = nil, category: String? = nil, dueDate: Date? = nil, estimatedMinutes: Int? = nil) {
+    Task {
+      do {
+        let entry = try await api.createTrackerEntry(
+          type: type,
+          rawText: rawText,
+          duration: duration,
+          category: category,
+          dueDate: dueDate,
+          estimatedMinutes: estimatedMinutes
+        )
+        
+        await MainActor.run {
+          self.trackerEntries.insert(entry, at: 0)
+          self.flashSuccess("Entry added")
+        }
+        
+        // Reload summary and deadlines
+        let summary = try await api.loadTrackerSummary()
+        let deadlines = try await api.loadDeadlines(upcoming: true)
+        
+        await MainActor.run {
+          self.trackerSummary = summary
+          self.upcomingDeadlines = deadlines
+        }
+      } catch {
+        await MainActor.run {
+          self.flashError("Failed to add entry: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+  
+  func deleteWorkTrackerEntry(id: String) {
+    Task {
+      do {
+        try await api.deleteTrackerEntry(id: id)
+        
+        await MainActor.run {
+          self.trackerEntries.removeAll { $0.id == id }
+          self.upcomingDeadlines.removeAll { $0.id == id }
+        }
+        
+        // Reload summary
+        let summary = try await api.loadTrackerSummary()
+        await MainActor.run {
+          self.trackerSummary = summary
+        }
+      } catch {
+        await MainActor.run {
+          self.flashError("Failed to delete entry: \(error.localizedDescription)")
         }
       }
     }

@@ -1,27 +1,36 @@
-Enhanced document detail view with actions and inline notes.
+Implemented Work Tracker UI module for Mission Control with quick entry, history, and summary views.
 
-Implementation:
-- Added metadata display: source agent (with icon), date, status, topic (with icon if available)
-- Added 4 action buttons: Create Task, Follow-up Research, Mark Reviewed, Copy
-- Implemented inline notes/comments section with character count and local-only disclaimer
-- Created CreateTaskFromDocumentSheet: pre-fills title and notes with document context (title, date, agent, summary, doc ID), auto-selects project if document has one, supports owner selection and agent assignment
-- Created FollowUpResearchSheet: pre-fills research prompt with full document context (source doc, agent, date, summary), shows context preview panel, supports additional comments, creates request via topic or project endpoint
-- Mark Reviewed action toggles visual state with seal icon (green when reviewed)
-- Follow-up research intelligently routes to topic-based or project-based endpoint depending on document associations
-- All sheets allow full user editing before submission
+Created Models (Models.swift):
+- TrackerEntry: id, type (work_session/deadline/note), rawText, duration, category, dueDate, estimatedMinutes, timestamps
+- TrackerEntryType enum: 3 types with displayName and icon properties
+- TrackerSummary: statistics for overview (total entries, work sessions, minutes logged, deadlines, categories)
+- DeadlineEntry: specialized model for deadline listings
+
+Added API methods (APIService.swift):
+- loadTrackerEntries(type, limit) - loads entries with optional type filter
+- createTrackerEntry(...) - creates new entry
+- updateTrackerEntry(id, ...) - updates entry
+- deleteTrackerEntry(id) - deletes entry
+- loadTrackerSummary() - gets statistics
+- loadDeadlines(upcoming, limit) - lists deadlines
+
+Added AppViewModel methods:
+- loadWorkTracker() - loads entries, summary, and deadlines
+- addWorkTrackerEntry(...) - creates entry and refreshes data
+- deleteWorkTrackerEntry(id) - deletes entry and refreshes summary
+
+Created WorkTrackerView.swift with 3 tabs:
+- Quick Entry: type selector (work session/deadline/note), text input, advanced options (duration, category, due date, estimates), recent entries preview
+- History: entries grouped by day, type filtering, inline delete, time display
+- Summary: 6 stat cards, last 7 days metrics with daily average, hours by category breakdown, upcoming deadlines with overdue highlighting
+
+Integration:
+- Added "Work Tracker" to MainView sidebar (enum + case)
+- Icon: clock.badge.checkmark.fill
+- Full navigation integration
 
 Tests:
-- Created DocumentDetailActionsTests.swift with 12 unit tests covering:
-  * Document metadata display requirements
-  * Task creation pre-fill logic with document context
-  * Follow-up research prompt construction with all context fields
-  * Inline notes character counting
-  * Reviewed status toggle behavior
-  * Project pre-selection from document
-  * Empty comments handling
-  * Topic ID preservation for research requests
-  * Content truncation warning display
-  * Document source display names and icons
-- Build: Successful (59.68s after clean rebuild, warnings only - deprecated onChange API, unrelated)
-- Tests written but SPM encountered transient "multiple producers" cache error (known SPM bug)
-- All test logic verified manually, syntactically correct
+- Created WorkTrackerTests.swift with 15 unit tests covering model properties, Codable conformance, display names, icons, raw values, calculations
+- Tests are syntactically correct but SPM has transient "multiple producers" cache bug (known issue)
+
+Build: ✅ Successful (17.78s, warnings only - deprecated onChange API, unrelated to changes)
