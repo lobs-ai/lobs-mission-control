@@ -812,15 +812,15 @@ private struct UpdatesSection: View {
     }
   }
   
-  /// Get the current app's git commit hash
-  private var currentCommit: String {
-    // Check runtime hash file first (written by bin/build)
-    let hashFile = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Library/Application Support/Lobs/dashboard-build-commit")
-    if let diskHash = try? String(contentsOf: hashFile, encoding: .utf8)
-      .trimmingCharacters(in: .whitespacesAndNewlines),
-       !diskHash.isEmpty {
-      return diskHash
+  /// Get the current app's git commit hash from the local repo
+  private func currentCommit() async -> String {
+    // Best source: ask git directly from the local repo
+    if let repoPath = findRepoDirectory() {
+      let result = await runCommand("/usr/bin/git", args: ["rev-parse", "--short", "HEAD"], workDir: repoPath)
+      if result.exitCode == 0 {
+        let commit = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !commit.isEmpty { return commit }
+      }
     }
     // Fall back to compile-time constant
     return BuildInfo.builtCommit
@@ -832,7 +832,7 @@ private struct UpdatesSection: View {
     defer { isChecking = false }
     
     do {
-      let commit = currentCommit
+      let commit = await currentCommit()
       let check = try await apiService.checkForUpdates(clientCommit: commit)
       updateInfo = check.repos.first(where: { $0.name == "lobs-mission-control" })
     } catch {
