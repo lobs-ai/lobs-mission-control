@@ -164,7 +164,15 @@ struct TopicBrowserView: View {
                 unreadCount: unreadCount(for: topic),
                 isSelected: selectedTopic?.id == topic.id,
                 onSelect: {
-                  selectedTopic = topic
+                  // If clicking the already-selected topic, toggle to force view reset
+                  if selectedTopic?.id == topic.id {
+                    selectedTopic = nil
+                    DispatchQueue.main.async {
+                      selectedTopic = topic
+                    }
+                  } else {
+                    selectedTopic = topic
+                  }
                 }
               )
             }
