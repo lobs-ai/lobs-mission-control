@@ -1,1 +1,1 @@
-Redesigned Work Tracker: removed entry type selector, single scrollable view with recommendations-first layout (what to do → quick entry → stats → history). Build successful (13.36s). Created 21 comprehensive tests validating new UX.
+Fixed add task from project overview: now stays in overview with project pre-selected, doesn't navigate into project. Added taskProjectId state variable. Build successful (19.56s). Created 14 comprehensive tests.

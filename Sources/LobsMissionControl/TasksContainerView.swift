@@ -12,6 +12,7 @@ struct TasksContainerView: View {
     @State private var quickAddText = ""
     @State private var projectSearchText = ""
     @State private var showArchivedProjects = false
+    @State private var taskProjectId: String? = nil  // Project to create task in
     
     var body: some View {
         HStack(spacing: 0) {
@@ -33,11 +34,13 @@ struct TasksContainerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.boardBg)
-        .sheet(isPresented: $showAddTask) {
+        .sheet(isPresented: $showAddTask, onDismiss: {
+            taskProjectId = nil  // Reset after sheet closes
+        }) {
             AddTaskSheet(
                 vm: vm,
                 autoPush: $autoPush,
-                projectId: vm.showOverview ? nil : vm.selectedProjectId
+                projectId: taskProjectId
             )
         }
         .sheet(isPresented: $showCreateProject) {
@@ -265,6 +268,7 @@ struct TasksContainerView: View {
                     tooltip: "New Task (⌘N)",
                     shortcut: "⌘N"
                 ) {
+                    taskProjectId = vm.showOverview ? nil : vm.selectedProjectId
                     showAddTask = true
                 }
             }
@@ -450,8 +454,7 @@ struct TasksContainerView: View {
                                 }
                             },
                             onAddTask: {
-                                vm.selectedProjectId = project.id
-                                vm.showOverview = false
+                                taskProjectId = project.id
                                 showAddTask = true
                             },
                             onArchive: {
