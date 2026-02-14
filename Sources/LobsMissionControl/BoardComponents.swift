@@ -2498,7 +2498,15 @@ struct AddTaskSheet: View {
           let missingTitle = trimmedTitle.isEmpty
           
           // Calculate the target project ID (what will actually be submitted)
-          let targetProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
+          // Priority: use projectId if provided (from init), otherwise use selectedProjectId (from picker)
+          let targetProjectId: String
+          if let explicitProjectId = projectId, !explicitProjectId.isEmpty {
+            // Project was specified in init (e.g., from project card) - use it directly
+            targetProjectId = explicitProjectId
+          } else {
+            // No project specified in init - use selected project from picker
+            targetProjectId = selectedProjectId
+          }
           let missingProject = targetProjectId.isEmpty
 
           if missingTitle || missingProject {
@@ -2526,7 +2534,12 @@ struct AddTaskSheet: View {
         // shake/highlight missing fields instead of silently ignoring the tap.
         .opacity({
           let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-          let targetProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
+          let targetProjectId: String
+          if let explicitProjectId = projectId, !explicitProjectId.isEmpty {
+            targetProjectId = explicitProjectId
+          } else {
+            targetProjectId = selectedProjectId
+          }
           return (trimmedTitle.isEmpty || targetProjectId.isEmpty) ? 0.55 : 1.0
         }())
       }
