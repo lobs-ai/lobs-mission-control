@@ -2691,9 +2691,8 @@ final class AppViewModel: ObservableObject {
       sortTasksForUX(&tasks)
     }
 
-    // Ensure the newly-created task is selected for quick action.
+    // Ensure the newly-created task is selected (but don't auto-open detail view)
     selectedTaskId = newTask.id
-    popoverTaskId = newTask.id
 
     // Save via API
     isGitBusy = true

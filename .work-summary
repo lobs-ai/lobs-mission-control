@@ -1,1 +1,1 @@
-Fixed calendar event filtering to include events with nil targetType, not just "self". Events without explicit targetType (user events) were being filtered out, causing calendar to show empty or error. Build successful (0.14s). Created CalendarEventFilteringTests.swift with 25 comprehensive tests.
+Fixed task creation to select task without auto-opening detail view. Removed popoverTaskId assignment in submitTaskToLobs. Build successful (0.14s). Tests in TaskCreationSelectionTests.swift (30 comprehensive tests).
