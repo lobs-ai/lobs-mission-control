@@ -814,6 +814,15 @@ final class APIService {
     return WorkerHistory(runs: runs)
   }
   
+  // MARK: - Orchestrator Status
+  
+  func loadOrchestratorStatus() async throws -> OrchestratorStatus {
+    return try await request(
+      method: "GET",
+      path: "/api/orchestrator/status"
+    )
+  }
+  
   // MARK: - Agent Statuses
   
   func loadAgentStatuses() async throws -> [String: AgentStatus] {

@@ -767,6 +767,16 @@ struct WorkerHistory: Codable {
   var runs: [WorkerHistoryRun]
 }
 
+// MARK: - Orchestrator Status
+
+struct OrchestratorStatus: Codable {
+  var running: Bool
+  var paused: Bool
+  var worker: WorkerStatus?
+  var agents: [String: AgentStatus]
+  var pollInterval: Int?
+}
+
 // MARK: - Agent Status
 
 struct AgentStats: Codable {

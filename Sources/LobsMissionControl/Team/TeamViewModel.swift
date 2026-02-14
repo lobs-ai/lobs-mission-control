@@ -40,12 +40,13 @@ class TeamViewModel: ObservableObject {
     error = nil
     
     do {
-      async let statuses = try apiService.loadAgentStatuses()
-      async let worker = try apiService.loadWorkerStatus()
+      // Load orchestrator status (includes worker + agents in one call)
+      async let orchestratorStatus = try apiService.loadOrchestratorStatus()
       async let history = try apiService.loadWorkerHistory()
       
-      agentStatuses = try await statuses
-      workerStatus = try await worker
+      let status = try await orchestratorStatus
+      agentStatuses = status.agents
+      workerStatus = status.worker
       workerHistory = try await history
     } catch {
       self.error = error.localizedDescription
