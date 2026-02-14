@@ -125,7 +125,7 @@ struct DetailedStatsView: View {
   private var ownerBreakdown: [(String, Int)] {
     var counts: [String: Int] = [:]
     for task in tasks where task.status == .active {
-      counts[task.owner.rawValue, default: 0] += 1
+      counts[task.resolvedOwner.rawValue, default: 0] += 1
     }
     return counts.sorted { $0.value > $1.value }
   }

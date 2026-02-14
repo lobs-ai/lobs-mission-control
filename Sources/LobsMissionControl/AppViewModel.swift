@@ -3607,11 +3607,11 @@ final class AppViewModel: ObservableObject {
 
     switch ownerFilter {
     case "lobs":
-      out = out.filter { if case .lobs = $0.owner { return true } else { return false } }
+      out = out.filter { if case .lobs = $0.resolvedOwner { return true } else { return false } }
     case "rafe":
-      out = out.filter { if case .rafe = $0.owner { return true } else { return false } }
+      out = out.filter { if case .rafe = $0.resolvedOwner { return true } else { return false } }
     case "other":
-      out = out.filter { if case .other = $0.owner { return true } else { return false } }
+      out = out.filter { if case .other = $0.resolvedOwner { return true } else { return false } }
     default:
       break
     }

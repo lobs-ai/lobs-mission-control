@@ -1171,7 +1171,7 @@ private struct TaskTile: View {
       }
 
       HStack(spacing: 5) {
-        MiniTag(text: task.owner.rawValue, color: ownerColor)
+        MiniTag(text: task.resolvedOwner.rawValue, color: ownerColor)
 
         if let shape = task.shape {
           MiniTag(text: "\(shapeIcon(shape)) \(shapeLabel(shape))", color: shapeColor(shape))
@@ -1291,7 +1291,7 @@ private struct TaskTile: View {
   }
 
   private var ownerColor: Color {
-    switch task.owner {
+    switch task.resolvedOwner {
     case .lobs: return .purple
     case .rafe: return .blue
     case .other: return .gray
@@ -1420,7 +1420,7 @@ private struct TaskDetailPopover: View {
           }
 
           HStack(spacing: 6) {
-            DetailTag(text: task.owner.rawValue, icon: "person", color: .purple)
+            DetailTag(text: task.resolvedOwner.rawValue, icon: "person", color: .purple)
             DetailTag(text: task.status.rawValue, icon: "circle.grid.2x2", color: .blue)
             if let ws = task.workState {
               DetailTag(text: ws.rawValue, icon: "hammer", color: .indigo)

@@ -1478,7 +1478,7 @@ private struct TaskDetailSheet: View {
             Text("Owner:")
               .font(.subheadline)
               .foregroundStyle(.secondary)
-            Text(task.owner.rawValue)
+            Text(task.resolvedOwner.rawValue)
               .font(.subheadline.bold())
           }
           

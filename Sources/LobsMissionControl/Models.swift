@@ -153,7 +153,7 @@ struct DashboardTask: Codable, Identifiable, Hashable {
   /// It does *not* imply the artifact has been approved.
   var status: TaskStatus
 
-  var owner: TaskOwner
+  var owner: TaskOwner?
   var createdAt: Date
   var updatedAt: Date
 
@@ -165,7 +165,7 @@ struct DashboardTask: Codable, Identifiable, Hashable {
     id: String,
     title: String,
     status: TaskStatus,
-    owner: TaskOwner,
+    owner: TaskOwner? = nil,
     createdAt: Date,
     updatedAt: Date,
     workState: WorkState? = nil,
@@ -234,6 +234,9 @@ struct DashboardTask: Codable, Identifiable, Hashable {
 
   /// Agent type assignment (programmer, researcher, reviewer, writer, architect).
   var agent: String?
+
+  /// Resolved owner (defaults to .lobs for backwards compatibility when server returns null).
+  var resolvedOwner: TaskOwner { owner ?? .lobs }
 }
 
 enum ProjectType: String, Codable, CaseIterable, Hashable {
