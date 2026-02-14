@@ -208,7 +208,8 @@ struct TopicBrowserView: View {
         researchRequests: researchRequests(for: topic),
         vm: vm,
         showReadItems: $showReadItems,
-        expandedSections: $expandedSections
+        expandedSections: $expandedSections,
+        selectedTopicId: topic.id  // Pass topic ID to detect changes
       )
       .id(topic.id) // Reset view state when topic changes
     } else {
@@ -314,6 +315,7 @@ private struct TopicContentView: View {
   @ObservedObject var vm: AppViewModel
   @Binding var showReadItems: Bool
   @Binding var expandedSections: Set<String>
+  let selectedTopicId: String  // Track topic ID to detect changes
   
   @State private var selectedDocument: AgentDocument? = nil
   @State private var showCreateRequestSheet: Bool = false
@@ -338,6 +340,10 @@ private struct TopicContentView: View {
           onBack: { selectedDocument = nil }
         )
       }
+    }
+    .onChange(of: selectedTopicId) { _ in
+      // Exit document view when topic changes
+      selectedDocument = nil
     }
   }
   
