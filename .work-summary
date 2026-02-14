@@ -1,1 +1,1 @@
-Fixed project sidebar active count to only include tasks with status==active, not all non-completed tasks. Build successful (0.13s). Created 14 comprehensive tests covering all task statuses and edge cases.
+Fixed button clickability in Knowledge page: added .contentShape(.rect) to TopicSidebarItem and TopicDocumentRow so entire visual area is clickable, not just text. Build successful (3.60s). Created 18 comprehensive tests.

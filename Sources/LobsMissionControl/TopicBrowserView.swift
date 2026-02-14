@@ -296,6 +296,7 @@ private struct TopicSidebarItem: View {
         RoundedRectangle(cornerRadius: 8)
           .stroke(isSelected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
       )
+      .contentShape(.rect)
     }
     .buttonStyle(.plain)
     .padding(.horizontal, 8)
@@ -726,6 +727,7 @@ private struct TopicDocumentRow: View {
       .padding(12)
       .background(Theme.subtle)
       .clipShape(RoundedRectangle(cornerRadius: 8))
+      .contentShape(.rect)
     }
     .buttonStyle(.plain)
   }
