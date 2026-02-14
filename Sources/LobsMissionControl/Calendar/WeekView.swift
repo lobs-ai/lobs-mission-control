@@ -82,16 +82,30 @@ struct WeekView: View {
                 .frame(height: 40)
             
             ForEach(hours, id: \.self) { hour in
-                HStack {
-                    Text(hourString(hour))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(width: 50, alignment: .trailing)
+                VStack(spacing: 0) {
+                    // Hour mark (e.g., "8:00 AM")
+                    HStack {
+                        Text(hourString(hour))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 50, alignment: .trailing)
+                        
+                        Spacer()
+                    }
+                    .frame(height: 30)
+                    .id("hour-\(hour)")
                     
-                    Spacer()
+                    // Half-hour mark (e.g., "8:30")
+                    HStack {
+                        Text(halfHourString(hour))
+                            .font(.caption)
+                            .foregroundColor(.secondary.opacity(0.7))
+                            .frame(width: 50, alignment: .trailing)
+                        
+                        Spacer()
+                    }
+                    .frame(height: 30)
                 }
-                .frame(height: 60)
-                .id("hour-\(hour)")
             }
         }
         .frame(width: 60)
@@ -126,20 +140,39 @@ struct WeekView: View {
                 // Grid lines and time slots
                 VStack(spacing: 0) {
                     ForEach(hours, id: \.self) { hour in
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(height: 60)
-                            .overlay(
-                                Rectangle()
-                                    .fill(Theme.border)
-                                    .frame(height: 1),
-                                alignment: .top
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) {
-                                let slotDate = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: date) ?? date
-                                onTimeSlotDoubleTap(slotDate)
-                            }
+                        VStack(spacing: 0) {
+                            // Hour slot (00 minutes)
+                            Rectangle()
+                                .fill(Color.clear)
+                                .frame(height: 30)
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Theme.border)
+                                        .frame(height: 1),
+                                    alignment: .top
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) {
+                                    let slotDate = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: date) ?? date
+                                    onTimeSlotDoubleTap(slotDate)
+                                }
+                            
+                            // Half-hour slot (30 minutes)
+                            Rectangle()
+                                .fill(Color.clear)
+                                .frame(height: 30)
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Theme.border.opacity(0.3))
+                                        .frame(height: 1),
+                                    alignment: .top
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) {
+                                    let slotDate = calendar.date(bySettingHour: hour, minute: 30, second: 0, of: date) ?? date
+                                    onTimeSlotDoubleTap(slotDate)
+                                }
+                        }
                     }
                 }
                 
@@ -181,7 +214,7 @@ struct WeekView: View {
         .padding(4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: height)
-        .background(colorForEventType(event.eventType).opacity(0.9))
+        .background(colorForEventType(event.eventType).opacity(0.85))
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .overlay(
             RoundedRectangle(cornerRadius: 4)
@@ -236,10 +269,17 @@ struct WeekView: View {
     }
     
     func hourString(_ hour: Int) -> String {
-        if hour == 0 { return "12 AM" }
-        if hour < 12 { return "\(hour) AM" }
-        if hour == 12 { return "12 PM" }
-        return "\(hour - 12) PM"
+        if hour == 0 { return "12:00 AM" }
+        if hour < 12 { return "\(hour):00 AM" }
+        if hour == 12 { return "12:00 PM" }
+        return "\(hour - 12):00 PM"
+    }
+    
+    func halfHourString(_ hour: Int) -> String {
+        if hour == 0 { return "12:30" }
+        if hour < 12 { return "\(hour):30" }
+        if hour == 12 { return "12:30" }
+        return "\(hour - 12):30"
     }
     
     func timeRangeString(_ event: ScheduledEvent) -> String {
@@ -254,16 +294,23 @@ struct WeekView: View {
     }
     
     func colorForEventType(_ type: String?) -> Color {
-        guard let type = type else { return .gray }
+        guard let type = type else { 
+            return Color(red: 0.5, green: 0.5, blue: 0.5) // muted gray
+        }
+        
         switch type.lowercased() {
-        case "reminder":
-            return .orange
-        case "task":
-            return .blue
+        case "lecture":
+            return Color(red: 0.4, green: 0.5, blue: 0.8) // muted indigo/blue
+        case "teaching":
+            return Color(red: 0.35, green: 0.65, blue: 0.6) // muted teal
+        case "office_hours":
+            return Color(red: 0.6, green: 0.45, blue: 0.7) // muted warm purple
         case "meeting":
-            return .green
+            return Color(red: 0.85, green: 0.5, blue: 0.45) // muted coral/salmon
+        case "lab":
+            return Color(red: 0.75, green: 0.6, blue: 0.35) // muted amber
         default:
-            return .purple
+            return Color(red: 0.5, green: 0.5, blue: 0.5) // muted gray
         }
     }
     

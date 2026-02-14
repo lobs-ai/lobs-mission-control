@@ -49,9 +49,9 @@ final class CalendarViewModel: ObservableObject {
                 allEvents = try await apiService.fetchTodayEvents()
             }
             
-            // Filter to only show meetings for self (exclude autonomous agent tasks)
+            // Filter to only show events for self (exclude autonomous agent tasks)
             events = allEvents.filter { event in
-                event.targetType == "self" && event.eventType == "meeting"
+                event.targetType == "self"
             }
             
             // Apply additional filter if set
