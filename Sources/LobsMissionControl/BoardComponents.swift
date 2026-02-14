@@ -2496,12 +2496,15 @@ struct AddTaskSheet: View {
         Button {
           let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
           let missingTitle = trimmedTitle.isEmpty
-          let missingProject = shouldShowProjectPicker && selectedProjectId.isEmpty
+          
+          // Calculate the target project ID (what will actually be submitted)
+          let targetProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
+          let missingProject = targetProjectId.isEmpty
 
           if missingTitle || missingProject {
             // Shake the missing fields to draw attention
             withAnimation(.default) {
-              if missingProject { shakeProject = true }
+              if missingProject && shouldShowProjectPicker { shakeProject = true }
               if missingTitle { shakeTitle = true }
             }
             // Reset after animation
@@ -2511,7 +2514,6 @@ struct AddTaskSheet: View {
             return
           }
 
-          let targetProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
           vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, projectId: targetProjectId, autoPush: autoPush)
           dismiss()
         } label: {
@@ -2522,7 +2524,11 @@ struct AddTaskSheet: View {
         .buttonStyle(.borderedProminent)
         // Keep the visual "disabled" affordance, but allow clicks so we can
         // shake/highlight missing fields instead of silently ignoring the tap.
-        .opacity((title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (shouldShowProjectPicker && selectedProjectId.isEmpty)) ? 0.55 : 1.0)
+        .opacity({
+          let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+          let targetProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
+          return (trimmedTitle.isEmpty || targetProjectId.isEmpty) ? 0.55 : 1.0
+        }())
       }
     }
     .padding(24)
