@@ -49,8 +49,8 @@ struct CalendarView: View {
             }
             .pickerStyle(.segmented)
             .padding()
-            .onChange(of: viewModel.viewMode) { newMode in
-                viewModel.changeViewMode(newMode)
+            .onChange(of: viewModel.viewMode) {
+                viewModel.changeViewMode(viewModel.viewMode)
             }
             
             Divider()
