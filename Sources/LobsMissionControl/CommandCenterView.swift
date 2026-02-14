@@ -15,46 +15,12 @@ struct CommandCenterView: View {
   var onOpenChat: (() -> Void)? = nil
   var memoryViewModel: MemoryViewModel?
   
-  @AppStorage("lastCommandCenterVisit") private var lastVisitTimestamp: Double = Date().timeIntervalSince1970
-  @State private var showWhileYouWereAway = false
-  @State private var whileYouWereAwayExpanded = false
   @State private var upcomingEvents: [ScheduledEvent] = []
   @State private var recentMemories: [MemoryItem] = []
   @State private var showNewTaskSheet = false
   @State private var showAllActivitySheet = false
   @State private var showDetailedStats = false
   @State private var selectedTask: DashboardTask? = nil
-  
-  private var lastVisit: Date {
-    Date(timeIntervalSince1970: lastVisitTimestamp)
-  }
-  
-  // Calculate "While You Were Away" stats
-  private var activitySinceLastVisit: (tasks: Int, inbox: Int, errors: Int) {
-    var completedTasks = 0
-    var newInbox = 0
-    var errors = 0
-    
-    for task in vm.tasks where task.status == .completed {
-      let completionDate = task.finishedAt ?? task.updatedAt
-      if completionDate > lastVisit {
-        completedTasks += 1
-      }
-    }
-    
-    for item in vm.inboxItems where item.modifiedAt > lastVisit {
-      newInbox += 1
-    }
-    
-    // Check worker history for recent errors
-    if let history = vm.workerHistory {
-      errors = history.runs.filter { run in
-        (run.succeeded == false) && (run.endedAt ?? run.startedAt ?? Date.distantPast) > lastVisit
-      }.count
-    }
-    
-    return (completedTasks, newInbox, errors)
-  }
   
   // Active tasks
   private var activeTasks: [DashboardTask] {
@@ -254,17 +220,6 @@ struct CommandCenterView: View {
             .padding(.horizontal, 24)
           }
           
-          // While You Were Away (full width)
-          if showWhileYouWereAway {
-            WhileYouWereAwayCard(
-              activity: activitySinceLastVisit,
-              isExpanded: $whileYouWereAwayExpanded,
-              recentTasks: activeTasks.prefix(5).map { $0 },
-              vm: vm
-            )
-            .padding(.horizontal, 24)
-          }
-          
           // Stats Cards Row
           StatsCardsRow(
             activeTasksCount: activeTasksCount,
@@ -338,10 +293,6 @@ struct CommandCenterView: View {
     }
     .background(Color(NSColor.controlBackgroundColor))
     .onAppear {
-      // Check if there's activity since last visit
-      let activity = activitySinceLastVisit
-      showWhileYouWereAway = (activity.tasks + activity.inbox + activity.errors) > 0
-      
       // Load calendar events
       Task {
         do {
@@ -358,9 +309,6 @@ struct CommandCenterView: View {
           recentMemories = Array(memVM.memories.prefix(3))
         }
       }
-    }
-    .onDisappear {
-      lastVisitTimestamp = Date().timeIntervalSince1970
     }
     .sheet(isPresented: $showNewTaskSheet) {
       NewTaskSheet(vm: vm, isPresented: $showNewTaskSheet)
@@ -395,139 +343,6 @@ struct CommandCenterView: View {
     }
     
     return "\(greeting)! Here's what's happening."
-  }
-}
-
-// MARK: - While You Were Away Card
-
-private struct WhileYouWereAwayCard: View {
-  let activity: (tasks: Int, inbox: Int, errors: Int)
-  @Binding var isExpanded: Bool
-  let recentTasks: [DashboardTask]
-  @ObservedObject var vm: AppViewModel
-  
-  var body: some View {
-    HomeCardContainer {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack {
-          Image(systemName: "clock.arrow.circlepath")
-            .font(.title2)
-            .foregroundStyle(.blue)
-          Text("While You Were Away")
-            .font(.title3.bold())
-          
-          Spacer()
-          
-          Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-              isExpanded.toggle()
-            }
-          } label: {
-            Image(systemName: isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
-              .font(.title3)
-              .foregroundStyle(.secondary)
-          }
-          .buttonStyle(.plain)
-        }
-        
-        // Summary
-        HStack(spacing: 20) {
-          if activity.tasks > 0 {
-            ActivityStat(
-              icon: "checkmark.circle.fill",
-              count: activity.tasks,
-              label: activity.tasks == 1 ? "task completed" : "tasks completed",
-              color: .green
-            )
-          }
-          
-          if activity.inbox > 0 {
-            ActivityStat(
-              icon: "tray.fill",
-              count: activity.inbox,
-              label: activity.inbox == 1 ? "new inbox item" : "new inbox items",
-              color: .blue
-            )
-          }
-          
-          if activity.errors > 0 {
-            ActivityStat(
-              icon: "exclamationmark.triangle.fill",
-              count: activity.errors,
-              label: activity.errors == 1 ? "error" : "errors",
-              color: .red
-            )
-          }
-          
-          if activity.tasks == 0 && activity.inbox == 0 && activity.errors == 0 {
-            Text("No new activity")
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-          }
-        }
-        
-        // Expanded details
-        if isExpanded && !recentTasks.isEmpty {
-          Divider()
-          
-          VStack(alignment: .leading, spacing: 8) {
-            Text("Completed Tasks")
-              .font(.caption.bold())
-              .foregroundStyle(.secondary)
-            
-            ForEach(recentTasks.prefix(5)) { task in
-              HStack(spacing: 8) {
-                Circle()
-                  .fill(statusColor(task.status))
-                  .frame(width: 6, height: 6)
-                Text(task.title)
-                  .font(.caption)
-                  .lineLimit(1)
-                Spacer()
-                if let projectId = task.projectId {
-                  if let project = vm.projects.first(where: { $0.id == projectId }) {
-                    Text(project.title)
-                      .font(.caption2)
-                      .foregroundStyle(.tertiary)
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  
-  private func statusColor(_ status: TaskStatus) -> Color {
-    switch status {
-    case .completed: return .green
-    case .active: return .blue
-    case .rejected: return .red
-    default: return .gray
-    }
-  }
-}
-
-private struct ActivityStat: View {
-  let icon: String
-  let count: Int
-  let label: String
-  let color: Color
-  
-  var body: some View {
-    HStack(spacing: 6) {
-      Image(systemName: icon)
-        .font(.body)
-        .foregroundStyle(color)
-      VStack(alignment: .leading, spacing: 2) {
-        Text("\(count)")
-          .font(.title3.bold())
-        Text(label)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-    }
   }
 }
 
