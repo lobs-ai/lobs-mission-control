@@ -235,25 +235,27 @@ struct CommandPaletteView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.tertiary)
               
-              HStack(spacing: 12) {
-                FilterHint(prefix: "#", label: "Projects")
-                FilterHint(prefix: "@", label: "Tasks")
-              }
-              HStack(spacing: 12) {
-                FilterHint(prefix: "/", label: "Docs")
-                FilterHint(prefix: "$", label: "Inbox")
-              }
-              HStack(spacing: 12) {
-                FilterHint(prefix: "!", label: "Memories")
-                FilterHint(prefix: "&", label: "Agents")
-              }
-              HStack(spacing: 12) {
-                FilterHint(prefix: "%", label: "Topics")
-                FilterHint(prefix: "^", label: "Calendar")
-              }
-              HStack(spacing: 12) {
-                FilterHint(prefix: "*", label: "Tracker")
-                FilterHint(prefix: ">", label: "Commands")
+              VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                  FilterHint(prefix: "#", label: "Projects")
+                  FilterHint(prefix: "@", label: "Tasks")
+                }
+                HStack(spacing: 12) {
+                  FilterHint(prefix: "/", label: "Docs")
+                  FilterHint(prefix: "$", label: "Inbox")
+                }
+                HStack(spacing: 12) {
+                  FilterHint(prefix: "!", label: "Memories")
+                  FilterHint(prefix: "&", label: "Agents")
+                }
+                HStack(spacing: 12) {
+                  FilterHint(prefix: "%", label: "Topics")
+                  FilterHint(prefix: "^", label: "Calendar")
+                }
+                HStack(spacing: 12) {
+                  FilterHint(prefix: "*", label: "Tracker")
+                  FilterHint(prefix: ">", label: "Commands")
+                }
               }
             }
             .padding(.top, 4)
