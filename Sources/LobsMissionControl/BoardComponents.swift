@@ -2335,10 +2335,18 @@ struct AddTaskSheet: View {
 
   @State private var title: String = ""
   @State private var notes: String = ""
-  @State private var selectedProjectId: String = ""
+  @State private var selectedProjectId: String
   @State private var selectedAgent: String = "programmer"
   @State private var shakeTitle: Bool = false
   @State private var shakeProject: Bool = false
+  
+  init(vm: AppViewModel, autoPush: Binding<Bool>, projectId: String?) {
+    self.vm = vm
+    self._autoPush = autoPush
+    self.projectId = projectId
+    // Initialize selectedProjectId based on projectId parameter
+    self._selectedProjectId = State(initialValue: projectId ?? "")
+  }
 
   private var activeProjects: [Project] {
     vm.sortedActiveProjects
@@ -2519,14 +2527,6 @@ struct AddTaskSheet: View {
     }
     .padding(24)
     .frame(minWidth: 480, minHeight: 320)
-    .onAppear {
-      if let projectId {
-        selectedProjectId = projectId
-      } else {
-        // When invoked from the overview/home screen, force an explicit choice.
-        selectedProjectId = ""
-      }
-    }
   }
 }
 

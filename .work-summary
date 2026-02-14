@@ -1,1 +1,1 @@
-Added local memory search to command palette. Now searches both API results and locally loaded memories from MemoryView, with duplicate filtering. Build successful (0.13s). Created CommandPaletteMemorySearchTests.swift with 70+ test cases.
+Fixed task creation bug when returning to tasks page. Moved selectedProjectId initialization from onAppear to init to eliminate race condition where user could attempt task creation before state was set. Build successful (0.13s). Created AddTaskSheetInitializationTests.swift with 60+ test cases.
