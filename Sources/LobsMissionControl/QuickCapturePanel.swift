@@ -138,6 +138,7 @@ struct QuickCaptureView: View {
 
   @State private var title: String = ""
   @State private var notes: String = ""
+  @State private var selectedAgent: String = "programmer"
 
   @State private var selectedProjectId: String = ""
   @State private var projectQuery: String = ""
@@ -153,6 +154,23 @@ struct QuickCaptureView: View {
 
   private var selectedProjectTitle: String {
     activeProjects.first(where: { $0.id == selectedProjectId })?.title ?? ""
+  }
+  
+  private var availableAgents: [(String, String, String)] {
+    [
+      ("programmer", "🛠️", "Code implementation"),
+      ("researcher", "🔬", "Research and investigation"),
+      ("reviewer", "🔍", "Code review"),
+      ("writer", "✍️", "Documentation"),
+      ("architect", "🏗️", "System design")
+    ]
+  }
+  
+  private var selectedAgentDisplay: String {
+    if let agent = availableAgents.first(where: { $0.0 == selectedAgent }) {
+      return "\(agent.1) \(agent.0.capitalized)"
+    }
+    return "Select agent"
   }
 
   private var recentProjectIds: [String] {
@@ -248,7 +266,31 @@ struct QuickCaptureView: View {
                 showingProjectPicker = true
               }
           }
-          .frame(width: 180)
+          .frame(width: 140)
+          
+          Menu {
+            ForEach(availableAgents, id: \.0) { agent in
+              Button {
+                selectedAgent = agent.0
+              } label: {
+                HStack {
+                  Text(agent.1)
+                  Text(agent.0.capitalized)
+                }
+              }
+            }
+          } label: {
+            Text(selectedAgentDisplay)
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+              .frame(width: 120, alignment: .leading)
+              .padding(.horizontal, 8)
+              .padding(.vertical, 4)
+              .background(Color(NSColor.controlBackgroundColor))
+              .clipShape(RoundedRectangle(cornerRadius: 5))
+          }
+          .buttonStyle(.plain)
+          .frame(width: 120)
 
           TextField("Notes (optional)", text: $notes)
             .textFieldStyle(.roundedBorder)
@@ -350,13 +392,14 @@ struct QuickCaptureView: View {
     vm.submitTaskToLobs(
       title: trimmed,
       notes: notes.isEmpty ? nil : notes,
-      agent: "programmer",
+      agent: selectedAgent,
       projectId: selectedProjectId,
       autoPush: true
     )
 
     title = ""
     notes = ""
+    selectedAgent = "programmer"  // Reset to default
     projectQuery = ""
     showingProjectPicker = false
     onDismiss()
