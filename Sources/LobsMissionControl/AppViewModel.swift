@@ -2234,7 +2234,7 @@ final class AppViewModel: ObservableObject {
           let _ = try await api.addTask(
             id: task.id,
             title: task.title,
-            owner: task.owner,
+            owner: task.owner ?? .lobs,
             status: task.status,
             projectId: task.projectId,
             workState: task.workState,

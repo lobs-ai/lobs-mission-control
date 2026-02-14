@@ -655,7 +655,7 @@ private struct ActivityEventRow: View {
     case .taskCompleted(let t):
       let projectId = t.projectId ?? "default"
       let projectName = vm.projects.first(where: { $0.id == projectId })?.title ?? projectId
-      return "\(projectName) · \(t.owner.rawValue)"
+      return "\(projectName) · \(t.owner?.rawValue ?? "unassigned")"
     case .inboxItem(let item):
       return item.summary
     case .workerRun(let run):

@@ -2263,7 +2263,7 @@ private struct TaskUpdateRequest: Codable {
   init(from task: DashboardTask) {
     self.title = task.title
     self.status = task.status.rawValue
-    self.owner = task.owner.rawValue
+    self.owner = task.owner?.rawValue
     self.workState = task.workState?.rawValue
     self.reviewState = task.reviewState?.rawValue
     self.projectId = task.projectId
