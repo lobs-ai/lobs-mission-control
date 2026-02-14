@@ -309,6 +309,8 @@ struct WeekView: View {
             return Color(red: 0.85, green: 0.5, blue: 0.45) // muted coral/salmon
         case "lab":
             return Color(red: 0.75, green: 0.6, blue: 0.35) // muted amber
+        case "discussion":
+            return Color(red: 0.55, green: 0.55, blue: 0.75) // muted slate blue
         default:
             return Color(red: 0.5, green: 0.5, blue: 0.5) // muted gray
         }
