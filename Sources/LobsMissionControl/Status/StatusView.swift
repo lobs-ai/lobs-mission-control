@@ -857,9 +857,18 @@ private struct UpdatesSection: View {
       return
     }
     
-    // Run git pull
-    let pullOutput = await runCommand("/usr/bin/git", args: ["pull", "--rebase", "origin", "main"], workDir: repoPath)
-    guard pullOutput.exitCode == 0 else {
+    // Stash any local changes before pulling to avoid rebase conflicts
+    let stashOutput = await runCommand("/usr/bin/git", args: ["stash", "push", "-m", "Auto-stash before update"], workDir: repoPath)
+    let hadStash = stashOutput.exitCode == 0 && !stashOutput.output.contains("No local changes to save")
+    
+    // Run git pull with autostash to handle any remaining changes
+    let pullOutput = await runCommand("/usr/bin/git", args: ["pull", "--rebase", "--autostash", "origin", "main"], workDir: repoPath)
+    
+    // If pull failed, try to restore stash
+    if pullOutput.exitCode != 0 {
+      if hadStash {
+        _ = await runCommand("/usr/bin/git", args: ["stash", "pop"], workDir: repoPath)
+      }
       selfUpdateResult = SelfUpdateResponse(
         success: false,
         pullOutput: pullOutput.output,
@@ -868,6 +877,11 @@ private struct UpdatesSection: View {
         binaryPath: nil
       )
       return
+    }
+    
+    // Restore stash if we had one
+    if hadStash {
+      _ = await runCommand("/usr/bin/git", args: ["stash", "pop"], workDir: repoPath)
     }
     
     // Get new commit hash
@@ -1090,17 +1104,24 @@ private struct SelfUpdateResultBanner: View {
   let result: SelfUpdateResponse
   let onRelaunch: () -> Void
   
+  @State private var countdown: Int = 10
+  @State private var timer: Timer?
+  
   var body: some View {
     HStack(spacing: 8) {
       Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
         .foregroundStyle(result.success ? .green : .red)
       
       VStack(alignment: .leading, spacing: 2) {
-        Text(result.success ? "Mission Control updated" : "Update failed")
+        Text(result.success ? "Update complete — relaunch required" : "Update failed")
           .font(.caption.bold())
         
-        if let newCommit = result.newCommit {
-          Text("Now at \(newCommit)")
+        if result.success {
+          Text("App will relaunch in \(countdown)s...")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        } else if let newCommit = result.newCommit {
+          Text("Built \(newCommit)")
             .font(.caption2)
             .foregroundStyle(.secondary)
         }
@@ -1117,9 +1138,10 @@ private struct SelfUpdateResultBanner: View {
       
       if result.success {
         Button {
+          timer?.invalidate()
           onRelaunch()
         } label: {
-          Label("Relaunch", systemImage: "arrow.clockwise.circle.fill")
+          Label("Relaunch Now", systemImage: "arrow.clockwise.circle.fill")
             .font(.caption.bold())
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -1133,5 +1155,24 @@ private struct SelfUpdateResultBanner: View {
     .padding(12)
     .background((result.success ? Color.green : Color.red).opacity(0.1))
     .clipShape(RoundedRectangle(cornerRadius: 8))
+    .onAppear {
+      if result.success {
+        startCountdown()
+      }
+    }
+    .onDisappear {
+      timer?.invalidate()
+    }
+  }
+  
+  private func startCountdown() {
+    timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+      if countdown > 0 {
+        countdown -= 1
+      } else {
+        timer?.invalidate()
+        onRelaunch()
+      }
+    }
   }
 }
