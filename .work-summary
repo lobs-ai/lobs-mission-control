@@ -1,1 +1,1 @@
-Fixed task creation to select task without auto-opening detail view. Removed popoverTaskId assignment in submitTaskToLobs. Build successful (0.14s). Tests in TaskCreationSelectionTests.swift (30 comprehensive tests).
+Fixed calendar week/month view server error by adding missing fields to ScheduledEvent model (fireCount, lastFiredAt, nextFireAt, recurrenceEnd, task fields). Server was returning these fields causing JSON decoding to fail. Build successful (0.13s). Created CalendarRangeDecodingTests.swift with 14 comprehensive tests.

@@ -1088,9 +1088,16 @@ struct ScheduledEvent: Codable, Identifiable {
   var endAt: Date?
   var allDay: Bool?
   var recurrenceRule: String?
+  var recurrenceEnd: Date?
   var targetType: String? // e.g., "task", "project"
   var targetAgent: String?
+  var taskProjectId: String?
+  var taskNotes: String?
+  var taskPriority: String?
   var status: String? // e.g., "pending", "completed", "cancelled"
+  var lastFiredAt: Date?
+  var nextFireAt: Date?
+  var fireCount: Int?
   var createdAt: Date?
   var updatedAt: Date?
   
