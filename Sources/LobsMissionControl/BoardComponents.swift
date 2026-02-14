@@ -2462,33 +2462,13 @@ struct AddTaskSheet: View {
         Text("Notes")
           .font(.callout)
           .fontWeight(.medium)
-        Text("Shift+Enter for new line")
+        Text("Optional")
           .font(.footnote)
           .foregroundStyle(.tertiary)
         SpellCheckingTextEditor(
           text: $notes,
           font: .systemFont(ofSize: NSFont.systemFontSize),
-          placeholder: "Additional context (optional)",
-          onSubmit: {
-            let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            let missingTitle = trimmedTitle.isEmpty
-            let missingProject = shouldShowProjectPicker && selectedProjectId.isEmpty
-
-            if missingTitle || missingProject {
-              withAnimation(.default) {
-                if missingProject { shakeProject = true }
-                if missingTitle { shakeTitle = true }
-              }
-              DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                withAnimation { shakeProject = false; shakeTitle = false }
-              }
-              return
-            }
-
-            let targetProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
-            vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, projectId: targetProjectId, autoPush: autoPush)
-            dismiss()
-          }
+          placeholder: "Additional context (optional)"
         )
         .frame(minHeight: 80, maxHeight: 160)
       }
@@ -2496,7 +2476,7 @@ struct AddTaskSheet: View {
       Spacer()
 
       HStack {
-        Text("⌘N to open · Enter to create · Shift+Enter for new line")
+        Text("⌘N to open · ⌘↵ to create")
           .font(.footnote)
           .foregroundStyle(.tertiary)
 

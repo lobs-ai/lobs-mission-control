@@ -1,30 +1,28 @@
-Fixed command palette filter hints layout - wrapped in VStack for proper vertical spacing and alignment
+Fixed AddTaskSheet notes field blocking submission - removed onSubmit callback to allow normal Enter key behavior
 
-**Issue**: User reported filter categories looking "weird" with "up and down words" that were hard to read
+**Issue**: User reported "can not create tasks sometimes when filling in the notes" - Enter key in notes field would trigger form submission attempt, and if validation failed (e.g., empty title), nothing would happen and user couldn't even add a newline
 
-**Root Cause**: Filter hints (# Projects, @ Tasks, etc.) were displayed as separate HStacks without a containing VStack, potentially causing layout issues where rows appeared misaligned or text seemed jumbled
+**Root Cause**: SpellCheckingTextEditor for notes had onSubmit callback configured, causing:
+- Bare Enter → triggers onSubmit → runs validation → if fails, silently blocks (confusing)
+- User had to use Shift+Enter for newlines (non-standard, easy to forget)
+- No visual feedback when submission blocked by validation
 
-**Fix**: Wrapped all filter hint rows in a VStack with proper alignment and spacing
-- Added `VStack(alignment: .leading, spacing: 8)` around all filter hint rows
-- Maintains 2 hints per row in HStacks with 12pt horizontal spacing
-- Adds 8pt vertical spacing between rows for clarity
-- Left-aligns all rows to prevent centering issues
+**Fix**: Removed onSubmit parameter from notes SpellCheckingTextEditor
+1. Enter now inserts newline (standard multi-line text editor behavior)
+2. Form submission only via "Create Task" button or ⌘↵ keyboard shortcut
+3. Updated help text: "⌘N to open · ⌘↵ to create" (removed confusing Shift+Enter instruction)
+4. Changed notes label hint from "Shift+Enter for new line" to "Optional"
 
-**Code Change** (CommandPaletteView.swift, lines ~230-260):
-```swift
-// Before: Separate HStacks with no container
-HStack { FilterHint FilterHint }
-HStack { FilterHint FilterHint }
-...
+**Code Changes** (BoardComponents.swift, AddTaskSheet):
+- Removed onSubmit callback from SpellCheckingTextEditor (lines ~2467-2491)
+- Updated help text to reflect actual submission method (line ~2478)
+- Simplified notes field label (line ~2464)
 
-// After: Properly wrapped with spacing
-VStack(alignment: .leading, spacing: 8) {
-  HStack(spacing: 12) { FilterHint FilterHint }
-  HStack(spacing: 12) { FilterHint FilterHint }
-  ...
-}
-```
+**Validation Preserved**:
+- Title still required
+- Project selection still required (when picker shown)
+- Validation now only runs on intentional submission (button click or ⌘↵)
 
-**Build**: ✅ Successful (2.25s)
-**Tests**: ✅ Created CommandPaletteFilterHintsTests.swift (24 tests, 6.4KB)
-**Impact**: Improved readability and layout consistency for filter hints in command palette empty state
+**Build**: ✅ Successful (10.47s)
+**Tests**: ✅ Created AddTaskNotesSubmissionTests.swift (31 comprehensive tests, 9.5KB)
+**User Experience**: Users can now type multi-line notes naturally with Enter key, clear submission method via button or keyboard shortcut
