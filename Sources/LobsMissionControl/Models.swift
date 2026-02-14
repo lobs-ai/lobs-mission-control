@@ -630,6 +630,34 @@ struct AgentDocument: Identifiable, Hashable, Codable {
     self.isStarred = isStarred
     self.summary = summary
   }
+  
+  // Custom decoding to handle missing isRead and isStarred from server
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    title = try container.decode(String.self, forKey: .title)
+    filename = try container.decode(String.self, forKey: .filename)
+    relativePath = try container.decode(String.self, forKey: .relativePath)
+    content = try container.decode(String.self, forKey: .content)
+    contentIsTruncated = try container.decode(Bool.self, forKey: .contentIsTruncated)
+    source = try container.decode(DocumentSource.self, forKey: .source)
+    status = try container.decodeIfPresent(DocumentStatus.self, forKey: .status)
+    topic = try container.decodeIfPresent(String.self, forKey: .topic)
+    topicId = try container.decodeIfPresent(String.self, forKey: .topicId)
+    projectId = try container.decodeIfPresent(String.self, forKey: .projectId)
+    taskId = try container.decodeIfPresent(String.self, forKey: .taskId)
+    date = try container.decode(Date.self, forKey: .date)
+    // isRead and isStarred are client-side only, default to false
+    isRead = try container.decodeIfPresent(Bool.self, forKey: .isRead) ?? false
+    isStarred = try container.decodeIfPresent(Bool.self, forKey: .isStarred) ?? false
+    summary = try container.decodeIfPresent(String.self, forKey: .summary)
+  }
+  
+  enum CodingKeys: String, CodingKey {
+    case id, title, filename, relativePath, content, contentIsTruncated
+    case source, status, topic, topicId, projectId, taskId, date
+    case isRead, isStarred, summary
+  }
 }
 
 extension DocumentSource: CaseIterable {
