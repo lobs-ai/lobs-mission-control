@@ -43,6 +43,9 @@ struct MainView: View {
     @State private var statusPresented: Bool = true
     @State private var documentsPresented: Bool = true
     
+    // Command Palette state
+    @State private var showCommandPalette: Bool = false
+    
     var body: some View {
         NavigationSplitView {
             sidebarContent
@@ -92,6 +95,45 @@ struct MainView: View {
             .animation(.spring(response: 0.3), value: vm.successBanner)
             .padding(.top, 8)
         }
+        .sheet(isPresented: $showCommandPalette) {
+            CommandPaletteView(
+                vm: vm,
+                isPresented: $showCommandPalette,
+                onNewTask: {
+                    selectedSection = .tasks
+                },
+                onOpenInbox: { itemId in
+                    selectedSection = .inbox
+                },
+                onOpenMemory: {
+                    selectedSection = .memory
+                },
+                onOpenChat: {
+                    selectedSection = .chat
+                },
+                onOpenStatus: {
+                    selectedSection = .status
+                },
+                onOpenSettings: {
+                    selectedSection = .settings
+                },
+                onOpenKnowledge: {
+                    selectedSection = .knowledge
+                },
+                onOpenCalendar: {
+                    selectedSection = .calendar
+                },
+                onOpenWorkTracker: {
+                    selectedSection = .workTracker
+                }
+            )
+            .frame(width: 600, height: 400)
+        }
+        .background(
+            KeyboardShortcutHandler {
+                showCommandPalette.toggle()
+            }
+        )
     }
     
     private func bannerView(message: String, color: Color, icon: String, onDismiss: @escaping () -> Void) -> some View {
@@ -234,5 +276,54 @@ struct MainView: View {
                 .environmentObject(orchestrator)
                 .navigationTitle("Settings")
         }
+    }
+}
+
+// MARK: - Keyboard Shortcut Handler
+
+/// Captures ⌘K globally to show the command palette
+private struct KeyboardShortcutHandler: NSViewRepresentable {
+    let onCommandK: () -> Void
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        
+        // Store closure in coordinator
+        context.coordinator.onCommandK = onCommandK
+        
+        // Install local event monitor for ⌘K
+        context.coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Check for ⌘K (keyCode 40 = 'k', modifiers = command)
+            if event.keyCode == 40 && event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.shift) {
+                DispatchQueue.main.async {
+                    context.coordinator.onCommandK?()
+                }
+                return nil // consume event
+            }
+            return event
+        }
+        
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Update closure in coordinator
+        context.coordinator.onCommandK = onCommandK
+    }
+    
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        // Clean up event monitor
+        if let monitor = coordinator.monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    class Coordinator {
+        var monitor: Any?
+        var onCommandK: (() -> Void)?
     }
 }

@@ -17,6 +17,9 @@ struct CommandPaletteView: View {
   var onOpenTeam: (() -> Void)? = nil
   var onOpenSettings: (() -> Void)? = nil
   var onOpenAgentDetail: ((String) -> Void)? = nil
+  var onOpenKnowledge: (() -> Void)? = nil
+  var onOpenCalendar: (() -> Void)? = nil
+  var onOpenWorkTracker: (() -> Void)? = nil
   
   @State private var searchText = ""
   @State private var selectedIndex = 0
@@ -37,6 +40,9 @@ struct CommandPaletteView: View {
     if searchText.hasPrefix("!") { return .memories }
     if searchText.hasPrefix("&") { return .agents }
     if searchText.hasPrefix(">") { return .commands }
+    if searchText.hasPrefix("%") { return .topics }
+    if searchText.hasPrefix("^") { return .calendar }
+    if searchText.hasPrefix("*") { return .workTracker }
     return .all
   }
   
@@ -99,6 +105,22 @@ struct CommandPaletteView: View {
       items.append(contentsOf: agentResults())
     }
     
+    // Topics & Documents
+    if filterMode == .all || filterMode == .topics {
+      items.append(contentsOf: topicResults())
+      items.append(contentsOf: documentResults())
+    }
+    
+    // Calendar events
+    if filterMode == .all || filterMode == .calendar {
+      items.append(contentsOf: calendarResults())
+    }
+    
+    // Work Tracker entries
+    if filterMode == .all || filterMode == .workTracker {
+      items.append(contentsOf: workTrackerResults())
+    }
+    
     let parsed = PaletteQuery.parse(queryText)
 
     // Optional project filter (e.g. "in:dashboard")
@@ -132,6 +154,9 @@ struct CommandPaletteView: View {
         case .memories: return recent.id.hasPrefix("memory:")
         case .agents: return recent.id.hasPrefix("agent:")
         case .commands: return recent.id.hasPrefix("action:")
+        case .topics: return recent.id.hasPrefix("topic:") || recent.id.hasPrefix("document:")
+        case .calendar: return recent.id.hasPrefix("calendar:")
+        case .workTracker: return recent.id.hasPrefix("tracker:")
         }
       }
       // Deduplicate by result ID
@@ -223,6 +248,11 @@ struct CommandPaletteView: View {
                 FilterHint(prefix: "&", label: "Agents")
               }
               HStack(spacing: 12) {
+                FilterHint(prefix: "%", label: "Topics")
+                FilterHint(prefix: "^", label: "Calendar")
+              }
+              HStack(spacing: 12) {
+                FilterHint(prefix: "*", label: "Tracker")
                 FilterHint(prefix: ">", label: "Commands")
               }
             }
@@ -565,6 +595,96 @@ struct CommandPaletteView: View {
     }
   }
   
+  private func topicResults() -> [CommandResult] {
+    return vm.topics.map { topic in
+      let docCount = vm.agentDocuments.filter { $0.topicId == topic.id }.count
+      let unreadCount = vm.agentDocuments.filter { $0.topicId == topic.id && !$0.isRead }.count
+      
+      let subtitle = docCount > 0
+        ? "\(docCount) document\(docCount == 1 ? "" : "s")" + (unreadCount > 0 ? " • \(unreadCount) unread" : "")
+        : "No documents"
+      
+      return CommandResult(
+        id: "topic:\(topic.id)",
+        icon: "folder.fill",
+        title: "\(topic.icon ?? "📁") \(topic.title)",
+        subtitle: subtitle,
+        category: "Topics",
+        action: {
+          onOpenKnowledge?()
+        }
+      )
+    }
+  }
+  
+  private func documentResults() -> [CommandResult] {
+    let recentDocs = vm.agentDocuments.sorted { $0.date > $1.date }.prefix(20)
+    
+    return recentDocs.map { doc in
+      let icon: String
+      switch doc.source {
+      case .writer: icon = "doc.text"
+      case .researcher: icon = "doc.text.magnifyingglass"
+      }
+      
+      let statusText = doc.isRead ? "Read" : "Unread"
+      let topicName = vm.topics.first(where: { $0.id == doc.topicId })?.title ?? "No topic"
+      
+      return CommandResult(
+        id: "document:\(doc.id)",
+        icon: icon,
+        title: doc.title,
+        subtitle: "\(statusText) • \(topicName)",
+        category: "Documents",
+        action: {
+          onOpenKnowledge?()
+        }
+      )
+    }
+  }
+  
+  private func calendarResults() -> [CommandResult] {
+    // TODO: Calendar events are managed by CalendarViewModel, not AppViewModel
+    // Would require integrating calendar data into AppViewModel or passing CalendarViewModel
+    // For now, returning empty array - calendar nav is via quick actions
+    return []
+  }
+  
+  private func workTrackerResults() -> [CommandResult] {
+    let recentEntries = vm.trackerEntries.sorted { $0.createdAt > $1.createdAt }.prefix(15)
+    
+    return recentEntries.map { entry in
+      let icon: String
+      let typeLabel: String
+      switch entry.type {
+      case .workSession:
+        icon = "clock.fill"
+        typeLabel = "Work"
+      case .deadline:
+        icon = "calendar.badge.exclamationmark"
+        typeLabel = "Deadline"
+      case .note:
+        icon = "note.text"
+        typeLabel = "Note"
+      }
+      
+      let dateFormatter = RelativeDateTimeFormatter()
+      dateFormatter.unitsStyle = .short
+      let timeAgo = dateFormatter.localizedString(for: entry.createdAt, relativeTo: Date())
+      
+      return CommandResult(
+        id: "tracker:\(entry.id)",
+        icon: icon,
+        title: entry.rawText,
+        subtitle: "\(typeLabel) • \(timeAgo)",
+        category: "Work Tracker",
+        action: {
+          onOpenWorkTracker?()
+        }
+      )
+    }
+  }
+  
   private func quickActionResults() -> [CommandResult] {
     return [
       CommandResult(
@@ -605,6 +725,36 @@ struct CommandPaletteView: View {
         category: "Actions",
         action: {
           onOpenTeam?()
+        }
+      ),
+      CommandResult(
+        id: "action:knowledge",
+        icon: "books.vertical.fill",
+        title: "Knowledge",
+        subtitle: "Browse topics and documents",
+        category: "Actions",
+        action: {
+          onOpenKnowledge?()
+        }
+      ),
+      CommandResult(
+        id: "action:calendar",
+        icon: "calendar",
+        title: "Calendar",
+        subtitle: "View calendar and events",
+        category: "Actions",
+        action: {
+          onOpenCalendar?()
+        }
+      ),
+      CommandResult(
+        id: "action:work-tracker",
+        icon: "clock.badge.checkmark.fill",
+        title: "Work Tracker",
+        subtitle: "Track work sessions and deadlines",
+        category: "Actions",
+        action: {
+          onOpenWorkTracker?()
         }
       ),
       CommandResult(
@@ -791,6 +941,9 @@ private enum FilterMode {
   case memories
   case agents
   case commands
+  case topics
+  case calendar
+  case workTracker
 }
 
 // MARK: - Command Result

@@ -1,1 +1,1 @@
-Fixed button clickability in Knowledge page: added .contentShape(.rect) to TopicSidebarItem and TopicDocumentRow so entire visual area is clickable, not just text. Build successful (3.60s). Created 18 comprehensive tests.
+Implemented global fuzzy finder (Command Palette) with ⌘K shortcut. Searches across all app data (projects, tasks, research, inbox, memories, topics, documents, work tracker). Added 10 filter modes, fuzzy matching, keyboard navigation, and recents. Integrated into MainView with navigation callbacks. Build successful. Created 96 comprehensive tests.

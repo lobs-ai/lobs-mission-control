@@ -210,6 +210,7 @@ struct TopicBrowserView: View {
         showReadItems: $showReadItems,
         expandedSections: $expandedSections
       )
+      .id(topic.id) // Reset view state when topic changes
     } else {
       VStack(spacing: 16) {
         Image(systemName: "folder")
@@ -1430,10 +1431,20 @@ private struct CreateTaskFromTopicSheet: View {
   @State private var title: String = ""
   @State private var notes: String = ""
   @State private var selectedProjectId: String?
-  @State private var owner: TaskOwner = .rafe
-  @State private var assignedAgent: String?
+  @State private var owner: TaskOwner = .lobs
+  @State private var assignedAgent: String = "programmer"
   @State private var isSaving: Bool = false
   @State private var errorMessage: String?
+  
+  private var availableAgents: [(String, String, String)] {
+    [
+      ("programmer", "🛠️", "Code implementation, bug fixes"),
+      ("researcher", "🔬", "Research and investigation"),
+      ("reviewer", "🔍", "Code review and feedback"),
+      ("writer", "✍️", "Documentation and writing"),
+      ("architect", "🏗️", "System design and architecture")
+    ]
+  }
   
   var body: some View {
     VStack(spacing: 0) {
@@ -1518,14 +1529,48 @@ private struct CreateTaskFromTopicSheet: View {
           
           if owner == .lobs {
             VStack(alignment: .leading, spacing: 6) {
-              Text("Assigned Agent")
+              Text("Agent")
                 .font(.subheadline)
                 .fontWeight(.medium)
-              TextField("Agent name (e.g., programmer, researcher)", text: Binding(
-                get: { assignedAgent ?? "" },
-                set: { assignedAgent = $0.isEmpty ? nil : $0 }
-              ))
-              .textFieldStyle(.roundedBorder)
+              
+              Menu {
+                ForEach(availableAgents, id: \.0) { agent in
+                  Button {
+                    assignedAgent = agent.0
+                  } label: {
+                    HStack(spacing: 6) {
+                      Text(agent.1)  // emoji
+                      VStack(alignment: .leading, spacing: 2) {
+                        Text(agent.0.capitalized)
+                          .font(.body)
+                        Text(agent.2)
+                          .font(.caption)
+                          .foregroundStyle(.secondary)
+                      }
+                    }
+                  }
+                }
+              } label: {
+                HStack(spacing: 8) {
+                  if let selected = availableAgents.first(where: { $0.0 == assignedAgent }) {
+                    Text(selected.1)  // emoji
+                    Text(selected.0.capitalized)
+                      .font(.body)
+                  } else {
+                    Text("Select agent")
+                      .foregroundStyle(.secondary)
+                  }
+                  Spacer()
+                  Image(systemName: "chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+              }
+              .buttonStyle(.plain)
             }
           }
           
@@ -1606,7 +1651,7 @@ private struct CreateTaskFromTopicSheet: View {
           status: .inbox,
           projectId: selectedProjectId,
           notes: notes,
-          agent: assignedAgent
+          agent: owner == .lobs ? assignedAgent : nil
         )
         
         await MainActor.run {
@@ -1828,10 +1873,20 @@ private struct CreateTaskFromDocumentSheet: View {
   @State private var title: String = ""
   @State private var notes: String = ""
   @State private var selectedProjectId: String?
-  @State private var owner: TaskOwner = .rafe
-  @State private var assignedAgent: String?
+  @State private var owner: TaskOwner = .lobs
+  @State private var assignedAgent: String = "programmer"
   @State private var isSaving: Bool = false
   @State private var errorMessage: String?
+  
+  private var availableAgents: [(String, String, String)] {
+    [
+      ("programmer", "🛠️", "Code implementation, bug fixes"),
+      ("researcher", "🔬", "Research and investigation"),
+      ("reviewer", "🔍", "Code review and feedback"),
+      ("writer", "✍️", "Documentation and writing"),
+      ("architect", "🏗️", "System design and architecture")
+    ]
+  }
   
   var body: some View {
     VStack(spacing: 0) {
@@ -1916,14 +1971,48 @@ private struct CreateTaskFromDocumentSheet: View {
           
           if owner == .lobs {
             VStack(alignment: .leading, spacing: 6) {
-              Text("Assigned Agent")
+              Text("Agent")
                 .font(.subheadline)
                 .fontWeight(.medium)
-              TextField("Agent name (e.g., programmer, researcher)", text: Binding(
-                get: { assignedAgent ?? "" },
-                set: { assignedAgent = $0.isEmpty ? nil : $0 }
-              ))
-              .textFieldStyle(.roundedBorder)
+              
+              Menu {
+                ForEach(availableAgents, id: \.0) { agent in
+                  Button {
+                    assignedAgent = agent.0
+                  } label: {
+                    HStack(spacing: 6) {
+                      Text(agent.1)  // emoji
+                      VStack(alignment: .leading, spacing: 2) {
+                        Text(agent.0.capitalized)
+                          .font(.body)
+                        Text(agent.2)
+                          .font(.caption)
+                          .foregroundStyle(.secondary)
+                      }
+                    }
+                  }
+                }
+              } label: {
+                HStack(spacing: 8) {
+                  if let selected = availableAgents.first(where: { $0.0 == assignedAgent }) {
+                    Text(selected.1)  // emoji
+                    Text(selected.0.capitalized)
+                      .font(.body)
+                  } else {
+                    Text("Select agent")
+                      .foregroundStyle(.secondary)
+                  }
+                  Spacer()
+                  Image(systemName: "chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+              }
+              .buttonStyle(.plain)
             }
           }
           
@@ -2015,7 +2104,7 @@ private struct CreateTaskFromDocumentSheet: View {
           status: .inbox,
           projectId: selectedProjectId,
           notes: notes,
-          agent: assignedAgent
+          agent: owner == .lobs ? assignedAgent : nil
         )
         
         await MainActor.run {
