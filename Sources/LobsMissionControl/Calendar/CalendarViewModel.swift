@@ -50,8 +50,10 @@ final class CalendarViewModel: ObservableObject {
             }
             
             // Filter to only show events for self (exclude autonomous agent tasks)
+            // Include events with targetType == "self" or nil (user events)
+            // Exclude events explicitly targeted to agents
             events = allEvents.filter { event in
-                event.targetType == "self"
+                event.targetType == nil || event.targetType == "self"
             }
             
             // Apply additional filter if set
