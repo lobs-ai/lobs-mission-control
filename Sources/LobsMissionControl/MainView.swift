@@ -35,21 +35,13 @@ struct MainView: View {
     @EnvironmentObject var orchestrator: OrchestratorManager
     
     @State private var selectedSection: MainSidebarSection = .home
-    @StateObject private var chatViewModel: ChatViewModel
-    @StateObject private var memoryViewModel: MemoryViewModel
+    @State private var chatViewModel: ChatViewModel?
+    @State private var memoryViewModel: MemoryViewModel?
     
     // Bindings for views that need isPresented
     @State private var inboxPresented: Bool = true
     @State private var statusPresented: Bool = true
     @State private var documentsPresented: Bool = true
-    
-    init() {
-        // Initialize view models that need to persist across section switches
-        let apiService = try! APIService()
-        let chatService = ChatService()
-        _chatViewModel = StateObject(wrappedValue: ChatViewModel(chatService: chatService, apiService: apiService))
-        _memoryViewModel = StateObject(wrappedValue: MemoryViewModel(apiService: apiService))
-    }
     
     var body: some View {
         NavigationSplitView {
@@ -59,6 +51,28 @@ struct MainView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 900, minHeight: 600)
+        .onChange(of: vm.apiService != nil) { hasAPI in
+            if hasAPI, let apiService = vm.apiService {
+                if chatViewModel == nil {
+                    let chatService = ChatService()
+                    chatViewModel = ChatViewModel(chatService: chatService, apiService: apiService)
+                }
+                if memoryViewModel == nil {
+                    memoryViewModel = MemoryViewModel(apiService: apiService)
+                }
+            }
+        }
+        .onAppear {
+            if let apiService = vm.apiService {
+                if chatViewModel == nil {
+                    let chatService = ChatService()
+                    chatViewModel = ChatViewModel(chatService: chatService, apiService: apiService)
+                }
+                if memoryViewModel == nil {
+                    memoryViewModel = MemoryViewModel(apiService: apiService)
+                }
+            }
+        }
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
                 if let error = vm.errorBanner {
@@ -162,8 +176,13 @@ struct MainView: View {
             .navigationTitle("Home")
             
         case .chat:
-            ChatView(viewModel: chatViewModel)
-                .navigationTitle("Chat")
+            if let chatVM = chatViewModel {
+                ChatView(viewModel: chatVM)
+                    .navigationTitle("Chat")
+            } else {
+                ProgressView("Loading...")
+                    .navigationTitle("Chat")
+            }
             
         case .tasks:
             TasksContainerView()
@@ -171,8 +190,13 @@ struct MainView: View {
                 .navigationTitle("Tasks")
             
         case .memory:
-            MemoryView(viewModel: memoryViewModel)
-                .navigationTitle("Memory")
+            if let memoryVM = memoryViewModel {
+                MemoryView(viewModel: memoryVM)
+                    .navigationTitle("Memory")
+            } else {
+                ProgressView("Loading...")
+                    .navigationTitle("Memory")
+            }
             
         case .knowledge:
             TopicBrowserView(vm: vm, isPresented: $documentsPresented)

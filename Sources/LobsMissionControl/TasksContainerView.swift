@@ -176,7 +176,7 @@ struct TasksContainerView: View {
     }
     
     private func taskCount(for projectId: String) -> Int {
-        vm.tasks.filter { $0.projectId == projectId && $0.status != .completed && $0.status != .rejected }.count
+        vm.tasks.filter { $0.projectId == projectId && $0.status == .active }.count
     }
     
     private func projectIcon(_ type: ProjectType) -> String {

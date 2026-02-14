@@ -1,1 +1,1 @@
-Fixed add task from project overview: now stays in overview with project pre-selected, doesn't navigate into project. Added taskProjectId state variable. Build successful (19.56s). Created 14 comprehensive tests.
+Fixed project sidebar active count to only include tasks with status==active, not all non-completed tasks. Build successful (0.13s). Created 14 comprehensive tests covering all task statuses and edge cases.
