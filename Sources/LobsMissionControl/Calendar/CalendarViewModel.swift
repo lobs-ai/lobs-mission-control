@@ -16,10 +16,9 @@ final class CalendarViewModel: ObservableObject {
     @Published var viewMode: ViewMode = .week
     
     enum ViewMode: String, CaseIterable {
+        case today = "Today"
         case week = "Week"
         case month = "Month"
-        case upcoming = "Upcoming"
-        case today = "Today"
     }
     
     init(apiService: APIService) {
@@ -33,25 +32,29 @@ final class CalendarViewModel: ObservableObject {
         errorMessage = nil
         
         do {
+            var allEvents: [ScheduledEvent]
+            
             switch viewMode {
             case .week:
                 let (startOfWeek, endOfWeek) = weekRange(for: selectedDate)
-                events = try await apiService.fetchCalendarRange(start: startOfWeek, end: endOfWeek)
+                allEvents = try await apiService.fetchCalendarRange(start: startOfWeek, end: endOfWeek)
                 
             case .month:
                 let calendar = Calendar.current
                 let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedDate))!
                 let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)!
-                events = try await apiService.fetchCalendarRange(start: startOfMonth, end: endOfMonth)
-                
-            case .upcoming:
-                events = try await apiService.fetchUpcomingEvents(limit: 50)
+                allEvents = try await apiService.fetchCalendarRange(start: startOfMonth, end: endOfMonth)
                 
             case .today:
-                events = try await apiService.fetchTodayEvents()
+                allEvents = try await apiService.fetchTodayEvents()
             }
             
-            // Apply filter if set
+            // Filter to only show meetings for self (exclude autonomous agent tasks)
+            events = allEvents.filter { event in
+                event.targetType == "self" && event.eventType == "meeting"
+            }
+            
+            // Apply additional filter if set
             if let filterType = filterType {
                 events = events.filter { $0.eventType == filterType }
             }

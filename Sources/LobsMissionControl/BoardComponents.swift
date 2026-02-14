@@ -2472,7 +2472,7 @@ struct AddTaskSheet: View {
           onSubmit: {
             let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             let missingTitle = trimmedTitle.isEmpty
-            let missingProject = selectedProjectId.isEmpty
+            let missingProject = shouldShowProjectPicker && selectedProjectId.isEmpty
 
             if missingTitle || missingProject {
               withAnimation(.default) {
@@ -2486,7 +2486,7 @@ struct AddTaskSheet: View {
             }
 
             let prevProject = vm.selectedProjectId
-            vm.selectedProjectId = selectedProjectId
+            vm.selectedProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
             vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, autoPush: autoPush)
             if vm.showOverview { vm.selectedProjectId = prevProject }
             dismiss()
@@ -2510,7 +2510,7 @@ struct AddTaskSheet: View {
         Button {
           let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
           let missingTitle = trimmedTitle.isEmpty
-          let missingProject = selectedProjectId.isEmpty
+          let missingProject = shouldShowProjectPicker && selectedProjectId.isEmpty
 
           if missingTitle || missingProject {
             // Shake the missing fields to draw attention
@@ -2526,7 +2526,7 @@ struct AddTaskSheet: View {
           }
 
           let prevProject = vm.selectedProjectId
-          vm.selectedProjectId = selectedProjectId
+          vm.selectedProjectId = shouldShowProjectPicker ? selectedProjectId : (projectId ?? selectedProjectId)
           vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, autoPush: autoPush)
           if vm.showOverview { vm.selectedProjectId = prevProject }
           dismiss()

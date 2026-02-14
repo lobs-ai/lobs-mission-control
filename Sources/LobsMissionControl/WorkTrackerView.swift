@@ -611,6 +611,7 @@ private struct CompactStatCard: View {
 private struct RecentHistorySection: View {
   @ObservedObject var vm: AppViewModel
   @State private var showingAll: Bool = false
+  @State private var selectedEntry: TrackerEntry?
   
   private var recentEntries: [TrackerEntry] {
     let sorted = vm.trackerEntries.sorted { $0.createdAt > $1.createdAt }
@@ -680,13 +681,18 @@ private struct RecentHistorySection: View {
               
               // Entries for this day
               ForEach(entries) { entry in
-                CompactEntryRow(entry: entry, vm: vm)
+                CompactEntryRow(entry: entry, vm: vm, onTap: {
+                  selectedEntry = entry
+                })
                   .padding(.horizontal, 20)
               }
             }
           }
         }
       }
+    }
+    .sheet(item: $selectedEntry) { entry in
+      EntryDetailSheet(entry: entry, vm: vm)
     }
   }
   
@@ -707,7 +713,9 @@ private struct RecentHistorySection: View {
 private struct CompactEntryRow: View {
   let entry: TrackerEntry
   @ObservedObject var vm: AppViewModel
+  let onTap: () -> Void
   @State private var showDeleteConfirm: Bool = false
+  @State private var isHovering: Bool = false
   
   var body: some View {
     HStack(spacing: 10) {
@@ -780,8 +788,19 @@ private struct CompactEntryRow: View {
     }
     .padding(.vertical, 8)
     .padding(.horizontal, 12)
-    .background(Theme.subtle.opacity(0.5))
+    .background(isHovering ? Theme.subtle.opacity(0.8) : Theme.subtle.opacity(0.5))
     .clipShape(RoundedRectangle(cornerRadius: 8))
+    .overlay(
+      RoundedRectangle(cornerRadius: 8)
+        .stroke(isHovering ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+    )
+    .onHover { hovering in
+      isHovering = hovering
+    }
+    .onTapGesture {
+      onTap()
+    }
+    .help("Click to view details")
   }
   
   private var entryColor: Color {
@@ -797,6 +816,219 @@ private struct CompactEntryRow: View {
     let formatter = DateFormatter()
     formatter.timeStyle = .short
     return formatter.string(from: date)
+  }
+}
+
+// MARK: - Entry Detail Sheet
+
+private struct EntryDetailSheet: View {
+  let entry: TrackerEntry
+  @ObservedObject var vm: AppViewModel
+  @Environment(\.dismiss) private var dismiss
+  @State private var showDeleteConfirm: Bool = false
+  
+  var body: some View {
+    NavigationStack {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 24) {
+          // Type badge and timestamp
+          VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+              Image(systemName: entry.type.icon)
+                .font(.title3)
+                .foregroundStyle(entryColor)
+              Text(entry.type.displayName)
+                .font(.headline)
+                .foregroundStyle(entryColor)
+              
+              Spacer()
+              
+              // Delete button
+              Button(role: .destructive) {
+                showDeleteConfirm = true
+              } label: {
+                Label("Delete", systemImage: "trash")
+                  .font(.footnote)
+                  .foregroundStyle(.red)
+              }
+              .buttonStyle(.plain)
+            }
+            
+            Divider()
+          }
+          
+          // Main content
+          VStack(alignment: .leading, spacing: 16) {
+            DetailRow(label: "Entry", icon: "text.quote") {
+              Text(entry.rawText)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            if let category = entry.category {
+              DetailRow(label: "Category", icon: "folder.fill") {
+                HStack(spacing: 4) {
+                  Image(systemName: "folder.fill")
+                    .font(.caption)
+                  Text(category)
+                }
+                .font(.callout)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.blue.opacity(0.1))
+                .foregroundStyle(.blue)
+                .clipShape(Capsule())
+              }
+            }
+            
+            if let duration = entry.duration {
+              DetailRow(label: "Duration", icon: "clock.fill") {
+                HStack(spacing: 4) {
+                  Text("\(duration)")
+                    .font(.title3.bold())
+                  Text("minutes")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
+              }
+            }
+            
+            if let dueDate = entry.dueDate {
+              DetailRow(label: "Due Date", icon: "calendar") {
+                VStack(alignment: .leading, spacing: 4) {
+                  Text(formatDate(dueDate))
+                    .font(.callout.bold())
+                  
+                  if dueDate > Date() {
+                    Text("Due \(relativeTimeUntil(dueDate))")
+                      .font(.caption)
+                      .foregroundStyle(.secondary)
+                  } else {
+                    Text("Overdue")
+                      .font(.caption.bold())
+                      .foregroundStyle(.red)
+                  }
+                }
+              }
+            }
+            
+            if let estimatedMinutes = entry.estimatedMinutes {
+              DetailRow(label: "Estimated Time", icon: "clock.badge") {
+                HStack(spacing: 4) {
+                  Text("\(estimatedMinutes)")
+                    .font(.callout.bold())
+                  Text("minutes")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+              }
+            }
+          }
+          
+          Divider()
+          
+          // Metadata
+          VStack(alignment: .leading, spacing: 12) {
+            Text("Metadata")
+              .font(.caption.bold())
+              .foregroundStyle(.secondary)
+              .textCase(.uppercase)
+            
+            VStack(alignment: .leading, spacing: 8) {
+              MetadataRow(label: "Created", value: formatFullDate(entry.createdAt))
+              MetadataRow(label: "Updated", value: formatFullDate(entry.updatedAt))
+              MetadataRow(label: "Entry ID", value: entry.id)
+            }
+            .font(.caption)
+          }
+        }
+        .padding(20)
+      }
+      .background(Theme.bg)
+      .navigationTitle("Entry Details")
+      .toolbar {
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Done") {
+            dismiss()
+          }
+        }
+      }
+      .confirmationDialog("Delete this entry?", isPresented: $showDeleteConfirm) {
+        Button("Delete", role: .destructive) {
+          vm.deleteWorkTrackerEntry(id: entry.id)
+          dismiss()
+        }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text("This action cannot be undone.")
+      }
+    }
+    .frame(width: 500, height: 600)
+  }
+  
+  private var entryColor: Color {
+    switch entry.type {
+    case .workSession: return .blue
+    case .deadline: return .orange
+    case .note: return .purple
+    case .analysis: return .mint
+    }
+  }
+  
+  private func formatDate(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
+  }
+  
+  private func formatFullDate(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .long
+    formatter.timeStyle = .medium
+    return formatter.string(from: date)
+  }
+}
+
+private struct DetailRow<Content: View>: View {
+  let label: String
+  let icon: String
+  @ViewBuilder let content: () -> Content
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 6) {
+        Image(systemName: icon)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Text(label)
+          .font(.caption.bold())
+          .foregroundStyle(.secondary)
+          .textCase(.uppercase)
+      }
+      
+      content()
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.subtle.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+  }
+}
+
+private struct MetadataRow: View {
+  let label: String
+  let value: String
+  
+  var body: some View {
+    HStack {
+      Text(label)
+        .foregroundStyle(.secondary)
+      Spacer()
+      Text(value)
+        .foregroundStyle(.primary)
+    }
+    .padding(.vertical, 4)
   }
 }
 

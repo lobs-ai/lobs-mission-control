@@ -1096,3 +1096,16 @@ struct ScheduledEvent: Codable, Identifiable {
     }
   }
 }
+
+// MARK: - Calendar Range Response
+
+struct CalendarDayEvents: Codable {
+  var date: String  // YYYY-MM-DD format
+  var events: [ScheduledEvent]
+}
+
+struct CalendarRangeResponse: Codable {
+  var startDate: String  // YYYY-MM-DD format
+  var endDate: String    // YYYY-MM-DD format
+  var days: [CalendarDayEvents]
+}

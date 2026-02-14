@@ -122,7 +122,7 @@ struct CalendarView: View {
                 }
             )
             
-        case .upcoming, .today:
+        case .today:
             listView
         }
     }
@@ -160,7 +160,7 @@ struct CalendarView: View {
                 .foregroundColor(.secondary)
             Text("No events")
                 .font(.headline)
-            Text(viewModel.viewMode == .today ? "No events scheduled for today" : "No upcoming events")
+            Text("No events scheduled for today")
                 .font(.caption)
                 .foregroundColor(.secondary)
             
@@ -484,7 +484,7 @@ struct CalendarView: View {
             viewModel.selectedDate = calendar.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
         case .month:
             viewModel.selectedDate = calendar.date(byAdding: .month, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-        case .today, .upcoming:
+        case .today:
             viewModel.selectedDate = calendar.date(byAdding: .day, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
         }
         Task {
@@ -499,7 +499,7 @@ struct CalendarView: View {
             viewModel.selectedDate = calendar.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
         case .month:
             viewModel.selectedDate = calendar.date(byAdding: .month, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-        case .today, .upcoming:
+        case .today:
             viewModel.selectedDate = calendar.date(byAdding: .day, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
         }
         Task {

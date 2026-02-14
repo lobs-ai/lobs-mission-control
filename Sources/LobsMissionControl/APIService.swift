@@ -857,17 +857,21 @@ final class APIService {
   }
   
   func fetchCalendarRange(start: Date, end: Date) async throws -> [ScheduledEvent] {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime]
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.timeZone = TimeZone(identifier: "UTC")
     
-    return try await request(
+    let response: CalendarRangeResponse = try await request(
       method: "GET",
       path: "/api/calendar/range",
       queryItems: [
-        URLQueryItem(name: "start", value: formatter.string(from: start)),
-        URLQueryItem(name: "end", value: formatter.string(from: end))
+        URLQueryItem(name: "start_date", value: formatter.string(from: start)),
+        URLQueryItem(name: "end_date", value: formatter.string(from: end))
       ]
     )
+    
+    // Flatten the days→events structure into a single array
+    return response.days.flatMap { $0.events }
   }
   
   func createEvent(
