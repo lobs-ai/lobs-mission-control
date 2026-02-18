@@ -1181,6 +1181,15 @@ private struct TaskTile: View {
           MiniTag(text: "\(agentIcon(agent)) \(agent.capitalized)", color: .cyan)
         }
 
+        MiniTag(text: trackingTagText(task.resolvedTrackingMode), color: trackingTagColor(task.resolvedTrackingMode))
+
+        if task.resolvedTrackingMode == .github, let issueNumber = task.githubIssueNumber {
+          MiniTag(text: "#\(issueNumber)", color: .indigo)
+        }
+        if task.resolvedTrackingMode == .github, let issueState = task.githubIssueState, !issueState.isEmpty {
+          MiniTag(text: issueState.capitalized, color: .teal)
+        }
+
         if let ws = task.workState {
           MiniTag(text: workStateLabel(ws), color: workStateColor(ws))
         }
@@ -1295,6 +1304,22 @@ private struct TaskTile: View {
     case .lobs: return .purple
     case .rafe: return .blue
     case .other: return .gray
+    }
+  }
+
+  private func trackingTagText(_ mode: TaskTrackingMode) -> String {
+    switch mode {
+    case .inbox: return "📥 Inbox"
+    case .github: return "🐙 GitHub"
+    case .local: return "💻 Local"
+    }
+  }
+
+  private func trackingTagColor(_ mode: TaskTrackingMode) -> Color {
+    switch mode {
+    case .inbox: return .blue
+    case .github: return .indigo
+    case .local: return .gray
     }
   }
 
@@ -1433,6 +1458,36 @@ private struct TaskDetailPopover: View {
               let dur = end.timeIntervalSince(started)
               DetailTag(text: formatDuration(dur), icon: "clock", color: .orange)
             }
+          }
+
+          if task.resolvedTrackingMode == .github {
+            HStack(spacing: 8) {
+              if let issueNumber = task.githubIssueNumber {
+                DetailTag(text: "Issue #\(issueNumber)", icon: "number", color: .indigo)
+              }
+              if let issueState = task.githubIssueState, !issueState.isEmpty {
+                DetailTag(text: issueState.capitalized, icon: "arrow.triangle.2.circlepath", color: .teal)
+              }
+              if let synced = task.githubSyncedAt {
+                DetailTag(text: "Synced \(relativeTime(synced))", icon: "clock.arrow.circlepath", color: .gray)
+              }
+              if let issueUrl = task.githubIssueUrl, let url = URL(string: issueUrl) {
+                Button {
+                  NSWorkspace.shared.open(url)
+                } label: {
+                  Label("Open in GitHub", systemImage: "link")
+                    .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+              }
+            }
+          }
+
+          if let workspace = task.workspaceContext, !workspace.isEmpty {
+            DetailTag(text: workspace, icon: "folder", color: .brown)
+          }
+          if let user = task.userContext, !user.isEmpty {
+            DetailTag(text: user, icon: "person.crop.circle", color: .mint)
           }
 
           // Shape picker
@@ -2337,6 +2392,10 @@ struct AddTaskSheet: View {
   @State private var notes: String = ""
   @State private var selectedProjectId: String
   @State private var selectedAgent: String = "programmer"
+  @State private var selectedTrackingMode: TaskTrackingMode = .inbox
+  @State private var githubIssueNumberText: String = ""
+  @State private var githubIssueUrlText: String = ""
+  @State private var githubIssueStateText: String = "open"
   @State private var shakeTitle: Bool = false
   @State private var shakeProject: Bool = false
   
@@ -2386,7 +2445,7 @@ struct AddTaskSheet: View {
             .font(.callout)
             .fontWeight(.medium)
           Picker("Project", selection: $selectedProjectId) {
-            Text("Choose a project")
+            Text("Inbox (No project)")
               .tag("")
             ForEach(activeProjects) { project in
               HStack(spacing: 6) {
@@ -2453,6 +2512,31 @@ struct AddTaskSheet: View {
       }
 
       VStack(alignment: .leading, spacing: 8) {
+        Text("Tracking")
+          .font(.callout)
+          .fontWeight(.medium)
+
+        Picker("Tracking", selection: $selectedTrackingMode) {
+          ForEach(TaskTrackingMode.allCases, id: \.self) { mode in
+            Text(mode.displayName).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+
+        if selectedTrackingMode == .github {
+          HStack(spacing: 8) {
+            TextField("Issue # (optional)", text: $githubIssueNumberText)
+              .textFieldStyle(.roundedBorder)
+              .frame(maxWidth: 160)
+            TextField("Issue URL (optional)", text: $githubIssueUrlText)
+              .textFieldStyle(.roundedBorder)
+          }
+          TextField("Issue state (open/closed)", text: $githubIssueStateText)
+            .textFieldStyle(.roundedBorder)
+        }
+      }
+
+      VStack(alignment: .leading, spacing: 8) {
         Text("Title")
           .font(.callout)
           .fontWeight(.medium)
@@ -2497,32 +2581,36 @@ struct AddTaskSheet: View {
           let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
           let missingTitle = trimmedTitle.isEmpty
           
-          // Calculate the target project ID (what will actually be submitted)
-          // Priority: use projectId if provided (from init), otherwise use selectedProjectId (from picker)
-          let targetProjectId: String
-          if let explicitProjectId = projectId, !explicitProjectId.isEmpty {
-            // Project was specified in init (e.g., from project card) - use it directly
-            targetProjectId = explicitProjectId
-          } else {
-            // No project specified in init - use selected project from picker
-            targetProjectId = selectedProjectId
-          }
-          let missingProject = targetProjectId.isEmpty
+          // Project is optional: explicit project from context wins, otherwise picker (empty => inbox/unscoped)
+          let targetProjectId: String? = {
+            if let explicitProjectId = projectId, !explicitProjectId.isEmpty { return explicitProjectId }
+            let picked = selectedProjectId.trimmingCharacters(in: .whitespacesAndNewlines)
+            return picked.isEmpty ? nil : picked
+          }()
 
-          if missingTitle || missingProject {
-            // Shake the missing fields to draw attention
-            withAnimation(.default) {
-              if missingProject && shouldShowProjectPicker { shakeProject = true }
-              if missingTitle { shakeTitle = true }
-            }
-            // Reset after animation
+          if missingTitle {
+            withAnimation(.default) { shakeTitle = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-              withAnimation { shakeProject = false; shakeTitle = false }
+              withAnimation { shakeTitle = false }
             }
             return
           }
 
-          vm.submitTaskToLobs(title: title, notes: notes.isEmpty ? nil : notes, agent: selectedAgent, projectId: targetProjectId, autoPush: autoPush)
+          let issueNumber = Int(githubIssueNumberText.trimmingCharacters(in: .whitespacesAndNewlines))
+          let issueURL = githubIssueUrlText.trimmingCharacters(in: .whitespacesAndNewlines)
+          let issueState = githubIssueStateText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+          vm.submitTaskToLobs(
+            title: title,
+            notes: notes.isEmpty ? nil : notes,
+            agent: selectedAgent,
+            projectId: targetProjectId,
+            trackingMode: selectedTrackingMode,
+            githubIssueNumber: selectedTrackingMode == .github ? issueNumber : nil,
+            githubIssueUrl: selectedTrackingMode == .github ? (issueURL.isEmpty ? nil : issueURL) : nil,
+            githubIssueState: selectedTrackingMode == .github ? (issueState.isEmpty ? "open" : issueState) : nil,
+            autoPush: autoPush
+          )
           dismiss()
         } label: {
           Text("Create Task")
@@ -2534,13 +2622,7 @@ struct AddTaskSheet: View {
         // shake/highlight missing fields instead of silently ignoring the tap.
         .opacity({
           let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-          let targetProjectId: String
-          if let explicitProjectId = projectId, !explicitProjectId.isEmpty {
-            targetProjectId = explicitProjectId
-          } else {
-            targetProjectId = selectedProjectId
-          }
-          return (trimmedTitle.isEmpty || targetProjectId.isEmpty) ? 0.55 : 1.0
+          return trimmedTitle.isEmpty ? 0.55 : 1.0
         }())
       }
     }

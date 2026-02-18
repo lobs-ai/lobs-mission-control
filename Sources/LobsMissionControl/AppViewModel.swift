@@ -2654,9 +2654,32 @@ final class AppViewModel: ObservableObject {
     optimisticUpdate(taskId: id, localMutation: { $0.workState = newState }) { _ in }
   }
 
-  func submitTaskToLobs(title: String, notes: String?, agent: String?, projectId: String, autoPush: Bool) {
+  func submitTaskToLobs(
+    title: String,
+    notes: String?,
+    agent: String?,
+    projectId: String?,
+    trackingMode: TaskTrackingMode = .inbox,
+    githubIssueNumber: Int? = nil,
+    githubIssueUrl: String? = nil,
+    githubIssueState: String? = nil,
+    autoPush: Bool
+  ) {
     let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let trimmedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let normalizedProjectId: String? = {
+      guard let value = projectId?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+      return value
+    }()
+    let onboardingState = OnboardingStateManager.load()
+    let workspaceContext: String? = {
+      guard let value = onboardingState.workspace?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+      return value
+    }()
+    let userContext: String? = {
+      guard let value = onboardingState.userName?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+      return value
+    }()
     guard !trimmedTitle.isEmpty else { return }
 
 
@@ -2671,12 +2694,19 @@ final class AppViewModel: ObservableObject {
       updatedAt: now,
       workState: .notStarted,
       reviewState: .approved,
-      projectId: projectId,
+      projectId: normalizedProjectId,
       artifactPath: nil,
       notes: trimmedNotes,
       startedAt: now,
       finishedAt: nil,
-      agent: agent
+      agent: agent,
+      trackingMode: trackingMode,
+      githubIssueNumber: githubIssueNumber,
+      githubIssueUrl: githubIssueUrl,
+      githubIssueState: githubIssueState,
+      githubSyncedAt: githubIssueUrl == nil ? nil : now,
+      workspaceContext: workspaceContext,
+      userContext: userContext
     )
 
 
@@ -2698,11 +2728,18 @@ final class AppViewModel: ObservableObject {
           title: trimmedTitle,
           owner: .lobs,
           status: .active,
-          projectId: projectId,
+          projectId: normalizedProjectId,
           workState: .notStarted,
           reviewState: .approved,
           notes: trimmedNotes,
-          agent: agent
+          agent: agent,
+          trackingMode: trackingMode,
+          githubIssueNumber: githubIssueNumber,
+          githubIssueUrl: githubIssueUrl,
+          githubIssueState: githubIssueState,
+          githubSyncedAt: githubIssueUrl == nil ? nil : now,
+          workspaceContext: workspaceContext,
+          userContext: userContext
         )
         await MainActor.run {
           // Update with server response

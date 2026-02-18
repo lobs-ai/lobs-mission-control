@@ -143,6 +143,20 @@ enum TaskShape: String, Codable, Hashable, CaseIterable {
   case admin = "admin"         // Organizational, process, logistics
 }
 
+enum TaskTrackingMode: String, Codable, Hashable, CaseIterable {
+  case inbox
+  case github
+  case local
+
+  var displayName: String {
+    switch self {
+    case .inbox: return "Inbox"
+    case .github: return "GitHub"
+    case .local: return "Local"
+    }
+  }
+}
+
 struct DashboardTask: Codable, Identifiable, Hashable {
   var id: String
   var title: String
@@ -179,7 +193,14 @@ struct DashboardTask: Codable, Identifiable, Hashable {
     blockedBy: [String]? = nil,
     pinned: Bool? = nil,
     shape: TaskShape? = nil,
-    agent: String? = nil
+    agent: String? = nil,
+    trackingMode: TaskTrackingMode? = nil,
+    githubIssueNumber: Int? = nil,
+    githubIssueUrl: String? = nil,
+    githubIssueState: String? = nil,
+    githubSyncedAt: Date? = nil,
+    workspaceContext: String? = nil,
+    userContext: String? = nil
   ) {
     self.id = id
     self.title = title
@@ -199,6 +220,13 @@ struct DashboardTask: Codable, Identifiable, Hashable {
     self.pinned = pinned
     self.shape = shape
     self.agent = agent
+    self.trackingMode = trackingMode
+    self.githubIssueNumber = githubIssueNumber
+    self.githubIssueUrl = githubIssueUrl
+    self.githubIssueState = githubIssueState
+    self.githubSyncedAt = githubSyncedAt
+    self.workspaceContext = workspaceContext
+    self.userContext = userContext
   }
 
   // Optional fields (schema evolves)
@@ -235,8 +263,23 @@ struct DashboardTask: Codable, Identifiable, Hashable {
   /// Agent type assignment (programmer, researcher, reviewer, writer, architect).
   var agent: String?
 
+  /// How this task is tracked (in-app inbox, GitHub issue-backed, or local-only).
+  var trackingMode: TaskTrackingMode?
+
+  /// GitHub issue metadata (present when trackingMode == .github).
+  var githubIssueNumber: Int?
+  var githubIssueUrl: String?
+  var githubIssueState: String?
+  var githubSyncedAt: Date?
+
+  /// Optional server-provided context metadata.
+  var workspaceContext: String?
+  var userContext: String?
+
   /// Resolved owner (defaults to .lobs for backwards compatibility when server returns null).
   var resolvedOwner: TaskOwner { owner ?? .lobs }
+
+  var resolvedTrackingMode: TaskTrackingMode { trackingMode ?? .inbox }
 }
 
 enum ProjectType: String, Codable, CaseIterable, Hashable {

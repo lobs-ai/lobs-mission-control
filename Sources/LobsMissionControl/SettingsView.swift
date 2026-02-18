@@ -11,6 +11,9 @@ struct SettingsView: View {
   @State private var showingServerSetupGuide = false
   @State private var showingRerunOnboardingConfirm = false
 
+  @AppStorage("agentStudioConfigJSON") private var agentStudioConfigJSON: String = ""
+  @AppStorage("routineControlsJSON") private var routineControlsJSON: String = ""
+
   @State private var serverURL: String = ""
   @State private var apiToken: String = ""
   @State private var connectionTestStatus: ConnectionTestStatus = .idle
@@ -172,6 +175,16 @@ struct SettingsView: View {
             .buttonStyle(.bordered)
             .disabled(vm.repoURL == nil)
           }
+
+          Divider()
+            .padding(.vertical, 8)
+
+          AgentStudioSection(configJSON: $agentStudioConfigJSON)
+
+          Divider()
+            .padding(.vertical, 8)
+
+          RoutineControlsSection(configJSON: $routineControlsJSON)
 
           Divider()
             .padding(.vertical, 8)
@@ -421,6 +434,129 @@ struct SettingsView: View {
         }
       }
     }
+  }
+}
+
+private struct AgentStudioAgentConfig: Identifiable, Codable, Equatable {
+  var id: String { type }
+  var type: String
+  var enabled: Bool
+  var model: String
+  var prompt: String
+  var toolPolicy: String
+
+  static let defaults: [AgentStudioAgentConfig] = [
+    .init(type: "programmer", enabled: true, model: "gpt-5", prompt: "Implement reliably and run tests.", toolPolicy: "standard"),
+    .init(type: "architect", enabled: true, model: "gpt-5", prompt: "Design with clear tradeoffs.", toolPolicy: "standard"),
+    .init(type: "researcher", enabled: true, model: "gpt-5", prompt: "Research deeply with citations.", toolPolicy: "standard"),
+    .init(type: "reviewer", enabled: true, model: "gpt-5", prompt: "Review for risk and correctness.", toolPolicy: "strict"),
+    .init(type: "writer", enabled: true, model: "gpt-5", prompt: "Write concise, useful docs.", toolPolicy: "standard"),
+  ]
+}
+
+private struct AgentStudioSection: View {
+  @Binding var configJSON: String
+  @State private var configs: [AgentStudioAgentConfig] = AgentStudioAgentConfig.defaults
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Agent Studio")
+        .font(.headline)
+      Text("Enable/disable agents and configure model, prompt, and tool policy. Saved locally until server config endpoints are available.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+      ForEach($configs) { $cfg in
+        VStack(alignment: .leading, spacing: 8) {
+          HStack {
+            Toggle(cfg.type.capitalized, isOn: $cfg.enabled)
+            Spacer()
+            Text(cfg.enabled ? "Enabled" : "Disabled")
+              .font(.caption)
+              .foregroundStyle(cfg.enabled ? .green : .secondary)
+          }
+          HStack {
+            TextField("Model", text: $cfg.model)
+            TextField("Tool policy", text: $cfg.toolPolicy)
+          }
+          .textFieldStyle(.roundedBorder)
+          TextField("Prompt", text: $cfg.prompt, axis: .vertical)
+            .textFieldStyle(.roundedBorder)
+            .lineLimit(2...4)
+        }
+        .padding(10)
+        .background(Color(NSColor.windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+      }
+    }
+    .onAppear(perform: load)
+    .onChange(of: configs) { _ in save() }
+  }
+
+  private func load() {
+    guard let data = configJSON.data(using: .utf8),
+          let decoded = try? JSONDecoder().decode([AgentStudioAgentConfig].self, from: data),
+          !decoded.isEmpty else { return }
+    configs = decoded
+  }
+
+  private func save() {
+    guard let data = try? JSONEncoder().encode(configs),
+          let json = String(data: data, encoding: .utf8) else { return }
+    configJSON = json
+  }
+}
+
+private struct RoutineControlsSection: View {
+  @Binding var configJSON: String
+  @State private var autoRunEnabled: Bool = true
+  @State private var autoSyncEnabled: Bool = true
+  @State private var maxConcurrentAgents: Double = 2
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Routine Controls")
+        .font(.headline)
+      Text("Local controls for routine automation while broader server routine APIs are rolled out.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+      Toggle("Enable routine auto-run", isOn: $autoRunEnabled)
+      Toggle("Auto-sync after routine completion", isOn: $autoSyncEnabled)
+
+      HStack {
+        Text("Max concurrent agents")
+        Slider(value: $maxConcurrentAgents, in: 1...5, step: 1)
+        Text("\(Int(maxConcurrentAgents))")
+          .font(.caption.monospacedDigit())
+          .frame(width: 20)
+      }
+    }
+    .onAppear(perform: load)
+    .onChange(of: autoRunEnabled) { _ in save() }
+    .onChange(of: autoSyncEnabled) { _ in save() }
+    .onChange(of: maxConcurrentAgents) { _ in save() }
+  }
+
+  private func load() {
+    guard let data = configJSON.data(using: .utf8),
+          let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+    autoRunEnabled = (decoded["autoRunEnabled"] as? Bool) ?? autoRunEnabled
+    autoSyncEnabled = (decoded["autoSyncEnabled"] as? Bool) ?? autoSyncEnabled
+    if let maxConcurrent = decoded["maxConcurrentAgents"] as? Double {
+      maxConcurrentAgents = maxConcurrent
+    }
+  }
+
+  private func save() {
+    let payload: [String: Any] = [
+      "autoRunEnabled": autoRunEnabled,
+      "autoSyncEnabled": autoSyncEnabled,
+      "maxConcurrentAgents": maxConcurrentAgents,
+    ]
+    guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
+          let json = String(data: data, encoding: .utf8) else { return }
+    configJSON = json
   }
 }
 

@@ -470,7 +470,14 @@ final class APIService {
     workState: WorkState? = .notStarted,
     reviewState: ReviewState? = .pending,
     notes: String?,
-    agent: String? = nil
+    agent: String? = nil,
+    trackingMode: TaskTrackingMode? = nil,
+    githubIssueNumber: Int? = nil,
+    githubIssueUrl: String? = nil,
+    githubIssueState: String? = nil,
+    githubSyncedAt: Date? = nil,
+    workspaceContext: String? = nil,
+    userContext: String? = nil
   ) async throws -> DashboardTask {
     let create = TaskCreateRequest(
       id: id,
@@ -481,7 +488,14 @@ final class APIService {
       reviewState: reviewState?.rawValue,
       projectId: projectId,
       notes: notes,
-      agent: agent
+      agent: agent,
+      trackingMode: trackingMode?.rawValue,
+      githubIssueNumber: githubIssueNumber,
+      githubIssueUrl: githubIssueUrl,
+      githubIssueState: githubIssueState,
+      githubSyncedAt: githubSyncedAt,
+      workspaceContext: workspaceContext,
+      userContext: userContext
     )
     
     return try await request(
@@ -2219,6 +2233,13 @@ private struct TaskCreateRequest: Codable {
   let projectId: String?
   let notes: String?
   let agent: String?
+  let trackingMode: String?
+  let githubIssueNumber: Int?
+  let githubIssueUrl: String?
+  let githubIssueState: String?
+  let githubSyncedAt: Date?
+  let workspaceContext: String?
+  let userContext: String?
   
   enum CodingKeys: String, CodingKey {
     case id
@@ -2230,6 +2251,13 @@ private struct TaskCreateRequest: Codable {
     case projectId = "project_id"
     case notes
     case agent
+    case trackingMode = "tracking_mode"
+    case githubIssueNumber = "github_issue_number"
+    case githubIssueUrl = "github_issue_url"
+    case githubIssueState = "github_issue_state"
+    case githubSyncedAt = "github_synced_at"
+    case workspaceContext = "workspace_context"
+    case userContext = "user_context"
   }
 }
 
@@ -2249,6 +2277,13 @@ private struct TaskUpdateRequest: Codable {
   let pinned: Bool?
   let shape: String?
   let agent: String?
+  let trackingMode: String?
+  let githubIssueNumber: Int?
+  let githubIssueUrl: String?
+  let githubIssueState: String?
+  let githubSyncedAt: Date?
+  let workspaceContext: String?
+  let userContext: String?
   
   init(
     title: String? = nil,
@@ -2265,7 +2300,14 @@ private struct TaskUpdateRequest: Codable {
     blockedBy: [String]? = nil,
     pinned: Bool? = nil,
     shape: String? = nil,
-    agent: String? = nil
+    agent: String? = nil,
+    trackingMode: String? = nil,
+    githubIssueNumber: Int? = nil,
+    githubIssueUrl: String? = nil,
+    githubIssueState: String? = nil,
+    githubSyncedAt: Date? = nil,
+    workspaceContext: String? = nil,
+    userContext: String? = nil
   ) {
     self.title = title
     self.status = status
@@ -2282,6 +2324,13 @@ private struct TaskUpdateRequest: Codable {
     self.pinned = pinned
     self.shape = shape
     self.agent = agent
+    self.trackingMode = trackingMode
+    self.githubIssueNumber = githubIssueNumber
+    self.githubIssueUrl = githubIssueUrl
+    self.githubIssueState = githubIssueState
+    self.githubSyncedAt = githubSyncedAt
+    self.workspaceContext = workspaceContext
+    self.userContext = userContext
   }
   
   init(from task: DashboardTask) {
@@ -2300,6 +2349,13 @@ private struct TaskUpdateRequest: Codable {
     self.pinned = task.pinned
     self.shape = task.shape?.rawValue
     self.agent = task.agent
+    self.trackingMode = task.trackingMode?.rawValue
+    self.githubIssueNumber = task.githubIssueNumber
+    self.githubIssueUrl = task.githubIssueUrl
+    self.githubIssueState = task.githubIssueState
+    self.githubSyncedAt = task.githubSyncedAt
+    self.workspaceContext = task.workspaceContext
+    self.userContext = task.userContext
   }
   
   enum CodingKeys: String, CodingKey {
@@ -2318,5 +2374,12 @@ private struct TaskUpdateRequest: Codable {
     case pinned
     case shape
     case agent
+    case trackingMode = "tracking_mode"
+    case githubIssueNumber = "github_issue_number"
+    case githubIssueUrl = "github_issue_url"
+    case githubIssueState = "github_issue_state"
+    case githubSyncedAt = "github_synced_at"
+    case workspaceContext = "workspace_context"
+    case userContext = "user_context"
   }
 }
