@@ -87,6 +87,15 @@ struct InboxView: View {
     }
   }
 
+  enum ReviewDecisionFilter: String, CaseIterable {
+    case all
+    case approved
+    case deferred
+    case rejected
+
+    var label: String { rawValue.capitalized }
+  }
+
   @ObservedObject var vm: AppViewModel
   @Binding var isPresented: Bool
   var initialSelectedItemId: String? = nil
@@ -94,6 +103,7 @@ struct InboxView: View {
   @State private var paneMode: PaneMode = .inbox
   @State private var selectedItem: InboxItem? = nil
   @State private var selectedReviewItem: InitiativeReviewItem? = nil
+  @State private var reviewDecisionFilter: ReviewDecisionFilter = .all
   @State private var searchText: String = ""
   @AppStorage("inboxShowReadItems") private var showReadItems: Bool = true
   @AppStorage("inboxTriageFilter") private var triageFilter: String = "all"
@@ -140,10 +150,16 @@ struct InboxView: View {
   }
 
   private var filteredReviewItems: [InitiativeReviewItem] {
-    let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    if q.isEmpty { return vm.initiativeReviewLog }
+    var items = vm.initiativeReviewLog
 
-    return vm.initiativeReviewLog.filter { item in
+    if reviewDecisionFilter != .all {
+      items = items.filter { $0.status.lowercased() == reviewDecisionFilter.rawValue }
+    }
+
+    let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if q.isEmpty { return items }
+
+    return items.filter { item in
       item.title.lowercased().contains(q)
       || (item.description ?? "").lowercased().contains(q)
       || (item.decisionSummary ?? "").lowercased().contains(q)
@@ -273,6 +289,14 @@ struct InboxView: View {
           .buttonStyle(.plain)
           .disabled(vm.unreadInboxCount == 0)
           .help("Mark all inbox items as read")
+        } else {
+          Picker("Decision", selection: $reviewDecisionFilter) {
+            ForEach(ReviewDecisionFilter.allCases, id: \.self) { filter in
+              Text(filter.label).tag(filter)
+            }
+          }
+          .pickerStyle(.segmented)
+          .frame(width: 280)
         }
 
         Button {
@@ -371,8 +395,14 @@ struct InboxView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
         } else if let item = selectedReviewItem {
-          InitiativeReviewDetail(item: item)
-            .frame(minWidth: 500, idealWidth: 700)
+          InitiativeReviewDetail(item: item, vm: vm, onOpenTask: {
+            if let taskId = item.taskId,
+               let task = vm.tasks.first(where: { $0.id == taskId }) {
+              vm.selectTask(task)
+              isPresented = false
+            }
+          })
+          .frame(minWidth: 500, idealWidth: 700)
         } else {
           VStack(spacing: 12) {
             Image(systemName: "text.page")
@@ -496,6 +526,8 @@ private struct ReviewLogRow: View {
 
 private struct InitiativeReviewDetail: View {
   let item: InitiativeReviewItem
+  @ObservedObject var vm: AppViewModel
+  let onOpenTask: () -> Void
 
   private var createdText: String {
     guard let createdAt = item.createdAt else { return "Unknown" }
@@ -522,6 +554,19 @@ private struct InitiativeReviewDetail: View {
         Text("Created: \(createdText)")
           .font(.caption)
           .foregroundStyle(.secondary)
+
+        if let taskId = item.taskId {
+          let exists = vm.tasks.contains(where: { $0.id == taskId })
+          Button {
+            onOpenTask()
+          } label: {
+            Label(exists ? "Open Linked Task" : "Linked Task Not Loaded", systemImage: "arrowshape.turn.up.right")
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .buttonStyle(.borderedProminent)
+          .disabled(!exists)
+          .help(taskId)
+        }
 
         Divider()
 
