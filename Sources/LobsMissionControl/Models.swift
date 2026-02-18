@@ -994,8 +994,9 @@ struct UsageBudgetLimits: Codable {
 }
 
 struct UsageRoutingPolicy: Codable {
-  var geminiFirstTaskTypes: [String]
-  var lowLevelTaskTypes: [String]
+  var subscriptionFirstTaskTypes: [String]
+  var subscriptionProviders: [String]
+  var subscriptionModels: [String]
   var fallbackChains: [String: [String]]
   var qualityPreference: [String]
 }
