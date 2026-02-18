@@ -105,11 +105,27 @@ You can also configure via Settings (⌘,) after initial setup.
 - WebSocket updates pushed to AppViewModel, which updates `@Published` properties
 - Local cache (CacheManager) for offline resilience
 
+## Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — App structure, data flow, key components
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Development guide, debugging, common pitfalls
+- **[AGENTS.md](AGENTS.md)** — AI agent guidance and constraints
+- **[docs/](docs/)** — Bug fixes, feature documentation, implementation notes
+  - See [docs/README.md](docs/README.md) for full index
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 For AI agents working on this codebase, see [AGENTS.md](AGENTS.md).
+
+## See Also
+
+**Lobs Ecosystem Documentation** (in `~/self-improvement/docs/`):
+- [LOBS_ECOSYSTEM.md](../self-improvement/docs/LOBS_ECOSYSTEM.md) — Cross-project architecture and feature matrix
+- [GETTING_STARTED.md](../self-improvement/docs/GETTING_STARTED.md) — 20-30 min ecosystem onboarding
+- [TECH_STACK_REFERENCE.md](../self-improvement/docs/TECH_STACK_REFERENCE.md) — Technology choices and patterns
+- [Code Quality System](../self-improvement/README.md) — Handoffs, reviews, technical debt tracking
 
 ## License
 
