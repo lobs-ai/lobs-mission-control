@@ -271,6 +271,7 @@ final class AppViewModel: ObservableObject {
   @Published var showInbox: Bool = false
   @Published var inboxResponsesByDocId: [String: InboxResponse] = [:]
   @Published var inboxThreadsByDocId: [String: InboxThread] = [:]
+  @Published var initiativeReviewLog: [InitiativeReviewItem] = []
 
   /// Threads with local edits that haven't been confirmed pushed yet.
   /// Prevents auto-refresh from overwriting freshly-posted messages.
@@ -795,6 +796,7 @@ final class AppViewModel: ObservableObject {
         await self.loadResearchDataAsync()
         await self.loadTrackerDataAsync()
         await self.loadInboxItemsAsync()
+        await self.loadInitiativeReviewLogAsync()
         await self.loadWorkerStatusAsync()
         await self.loadAgentStatusesAsync()
         await self.loadAgentDocumentsAsync()
@@ -1280,6 +1282,7 @@ final class AppViewModel: ObservableObject {
         await self.loadResearchDataAsync()
         await self.loadTrackerDataAsync()
         await self.loadInboxItemsAsync()
+        await self.loadInitiativeReviewLogAsync()
         await self.loadWorkerStatusAsync()
         
         await MainActor.run {
@@ -1942,6 +1945,20 @@ final class AppViewModel: ObservableObject {
         await MainActor.run {
           self.flashError("Failed to load inbox: \(error.localizedDescription)")
         }
+      }
+    }
+  }
+
+  func loadInitiativeReviewLog() {
+    Task {
+      do {
+        let items = try await api.loadInitiativeReviewLog()
+        await MainActor.run {
+          self.initiativeReviewLog = items
+        }
+      } catch {
+        // Non-critical surface; fail quietly to avoid noisy UX.
+        print("⚠️ Failed to load initiative review log: \(error)")
       }
     }
   }
@@ -3856,6 +3873,18 @@ final class AppViewModel: ObservableObject {
     } catch {
       print("⚠️ Failed to load inbox items: \(error)")
       await MainActor.run { self.flashError("Failed to load inbox: \(error.localizedDescription)") }
+    }
+  }
+
+  /// Load initiative review log asynchronously
+  private func loadInitiativeReviewLogAsync() async {
+    do {
+      let items = try await api.loadInitiativeReviewLog()
+      await MainActor.run {
+        self.initiativeReviewLog = items
+      }
+    } catch {
+      print("⚠️ Failed to load initiative review log: \(error)")
     }
   }
 

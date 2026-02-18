@@ -602,6 +602,28 @@ struct InboxThread: Codable, Identifiable, Hashable {
   }
 }
 
+// MARK: - Initiative Review Log
+
+struct InitiativeReviewItem: Identifiable, Codable, Hashable {
+  var id: String
+  var proposedByAgent: String
+  var ownerAgent: String?
+  var selectedAgent: String?
+  var selectedProjectId: String?
+  var taskId: String?
+  var title: String
+  var description: String?
+  var category: String
+  var riskTier: String
+  var status: String
+  var rationale: String?
+  var decisionSummary: String?
+  var learningFeedback: String?
+  var approvedBy: String?
+  var createdAt: Date?
+  var updatedAt: Date?
+}
+
 // MARK: - Agent Documents (Reports & Research)
 
 enum DocumentSource: String, Codable, Hashable {

@@ -75,11 +75,25 @@ private typealias ITheme = Theme
 // MARK: - Inbox View
 
 struct InboxView: View {
+  enum PaneMode: String, CaseIterable {
+    case inbox
+    case reviewLog
+
+    var title: String {
+      switch self {
+      case .inbox: return "Inbox"
+      case .reviewLog: return "Review Log"
+      }
+    }
+  }
+
   @ObservedObject var vm: AppViewModel
   @Binding var isPresented: Bool
   var initialSelectedItemId: String? = nil
 
+  @State private var paneMode: PaneMode = .inbox
   @State private var selectedItem: InboxItem? = nil
+  @State private var selectedReviewItem: InitiativeReviewItem? = nil
   @State private var searchText: String = ""
   @AppStorage("inboxShowReadItems") private var showReadItems: Bool = true
   @AppStorage("inboxTriageFilter") private var triageFilter: String = "all"
@@ -125,23 +139,39 @@ struct InboxView: View {
     return items
   }
 
+  private var filteredReviewItems: [InitiativeReviewItem] {
+    let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if q.isEmpty { return vm.initiativeReviewLog }
+
+    return vm.initiativeReviewLog.filter { item in
+      item.title.lowercased().contains(q)
+      || (item.description ?? "").lowercased().contains(q)
+      || (item.decisionSummary ?? "").lowercased().contains(q)
+      || item.category.lowercased().contains(q)
+    }
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       // Header
       HStack(spacing: 12) {
         HStack(spacing: 8) {
-          Image(systemName: "tray.full.fill")
+          Image(systemName: paneMode == .inbox ? "tray.full.fill" : "checklist")
             .font(.title2)
             .foregroundStyle(.linearGradient(
               colors: [.blue, .indigo],
               startPoint: .topLeading,
               endPoint: .bottomTrailing
             ))
-          Text("Inbox")
-            .font(.title3)
-            .fontWeight(.bold)
 
-          if vm.unreadInboxCount > 0 {
+          Picker("View", selection: $paneMode) {
+            Text("Inbox").tag(PaneMode.inbox)
+            Text("Review Log").tag(PaneMode.reviewLog)
+          }
+          .pickerStyle(.segmented)
+          .frame(width: 240)
+
+          if paneMode == .inbox, vm.unreadInboxCount > 0 {
             Text("\(vm.unreadInboxCount) new")
               .font(.system(size: 11, weight: .semibold))
               .padding(.horizontal, 8)
@@ -159,7 +189,7 @@ struct InboxView: View {
           Image(systemName: "magnifyingglass")
             .foregroundStyle(.secondary)
             .font(.footnote)
-          TextField("Search inbox…", text: $searchText)
+          TextField(paneMode == .inbox ? "Search inbox…" : "Search review log…", text: $searchText)
             .textFieldStyle(.plain)
             .frame(width: 160)
         }
@@ -168,80 +198,82 @@ struct InboxView: View {
         .background(ITheme.subtle)
         .clipShape(RoundedRectangle(cornerRadius: 8))
 
-        // Triage filter
-        Menu {
-          Button {
-            triageFilter = "all"
-          } label: {
-            HStack {
-              Text("All")
-              if triageFilter == "all" {
-                Image(systemName: "checkmark")
-              }
-            }
-          }
-
-          Divider()
-
-          ForEach(InboxTriageStatus.allCases, id: \.self) { status in
+        if paneMode == .inbox {
+          // Triage filter
+          Menu {
             Button {
-              triageFilter = status.rawValue
+              triageFilter = "all"
             } label: {
               HStack {
-                Image(systemName: status.iconName)
-                Text(status.displayName)
-                if triageFilter == status.rawValue {
+                Text("All")
+                if triageFilter == "all" {
                   Image(systemName: "checkmark")
                 }
               }
             }
-          }
-        } label: {
-          HStack(spacing: 4) {
-            Image(systemName: triageFilter == "all" ? "tray.2" : InboxTriageStatus(rawValue: triageFilter)?.iconName ?? "tray.2")
-            Text(triageFilter == "all" ? "All" : InboxTriageStatus(rawValue: triageFilter)?.displayName ?? "All")
-              .font(.footnote)
-          }
-          .padding(.horizontal, 10)
-          .padding(.vertical, 6)
-          .background(triageFilter == "all" ? ITheme.subtle : Color.orange.opacity(0.12))
-          .clipShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
 
-        // Toggle read
-        Button {
-          showReadItems.toggle()
-        } label: {
-          HStack(spacing: 4) {
-            Image(systemName: showReadItems ? "eye" : "eye.slash")
-            Text(showReadItems ? "All" : "Unread")
-              .font(.footnote)
-          }
-          .padding(.horizontal, 10)
-          .padding(.vertical, 6)
-          .background(showReadItems ? ITheme.subtle : Color.blue.opacity(0.12))
-          .clipShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
+            Divider()
 
-        // Mark all as read
-        Button {
-          vm.markAllInboxItemsAsRead()
-        } label: {
-          HStack(spacing: 4) {
-            Image(systemName: "checkmark.circle")
-            Text("Mark all read")
-              .font(.footnote)
+            ForEach(InboxTriageStatus.allCases, id: \.self) { status in
+              Button {
+                triageFilter = status.rawValue
+              } label: {
+                HStack {
+                  Image(systemName: status.iconName)
+                  Text(status.displayName)
+                  if triageFilter == status.rawValue {
+                    Image(systemName: "checkmark")
+                  }
+                }
+              }
+            }
+          } label: {
+            HStack(spacing: 4) {
+              Image(systemName: triageFilter == "all" ? "tray.2" : InboxTriageStatus(rawValue: triageFilter)?.iconName ?? "tray.2")
+              Text(triageFilter == "all" ? "All" : InboxTriageStatus(rawValue: triageFilter)?.displayName ?? "All")
+                .font(.footnote)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(triageFilter == "all" ? ITheme.subtle : Color.orange.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
           }
-          .padding(.horizontal, 10)
-          .padding(.vertical, 6)
-          .background(ITheme.subtle)
-          .clipShape(RoundedRectangle(cornerRadius: 8))
+          .buttonStyle(.plain)
+
+          // Toggle read
+          Button {
+            showReadItems.toggle()
+          } label: {
+            HStack(spacing: 4) {
+              Image(systemName: showReadItems ? "eye" : "eye.slash")
+              Text(showReadItems ? "All" : "Unread")
+                .font(.footnote)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(showReadItems ? ITheme.subtle : Color.blue.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+          }
+          .buttonStyle(.plain)
+
+          // Mark all as read
+          Button {
+            vm.markAllInboxItemsAsRead()
+          } label: {
+            HStack(spacing: 4) {
+              Image(systemName: "checkmark.circle")
+              Text("Mark all read")
+                .font(.footnote)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(ITheme.subtle)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+          }
+          .buttonStyle(.plain)
+          .disabled(vm.unreadInboxCount == 0)
+          .help("Mark all inbox items as read")
         }
-        .buttonStyle(.plain)
-        .disabled(vm.unreadInboxCount == 0)
-        .help("Mark all inbox items as read")
 
         Button {
           isPresented = false
@@ -265,32 +297,56 @@ struct InboxView: View {
         // Left: Item list
         ScrollView {
           LazyVStack(spacing: 6) {
-            if filteredItems.isEmpty {
-              VStack(spacing: 12) {
-                Image(systemName: "tray")
-                  .font(.system(size: 36))
-                  .foregroundStyle(.quaternary)
-                Text("No documents")
-                  .font(.callout)
-                  .foregroundStyle(.secondary)
-                Text("Design docs and artifacts will appear here")
-                  .font(.footnote)
-                  .foregroundStyle(.tertiary)
+            if paneMode == .inbox {
+              if filteredItems.isEmpty {
+                VStack(spacing: 12) {
+                  Image(systemName: "tray")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.quaternary)
+                  Text("No documents")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                  Text("Actionable approvals will appear here")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 60)
+              } else {
+                ForEach(filteredItems) { item in
+                  InboxItemRow(
+                    item: item,
+                    isSelected: selectedItem?.id == item.id,
+                    vm: vm,
+                    onSelect: {
+                      selectedItem = item
+                      vm.markInboxItemRead(item)
+                      vm.ensureInboxItemContentLoaded(docId: item.id)
+                    }
+                  )
+                }
               }
-              .frame(maxWidth: .infinity)
-              .padding(.top, 60)
             } else {
-              ForEach(filteredItems) { item in
-                InboxItemRow(
-                  item: item,
-                  isSelected: selectedItem?.id == item.id,
-                  vm: vm,
-                  onSelect: {
-                    selectedItem = item
-                    vm.markInboxItemRead(item)
-                    vm.ensureInboxItemContentLoaded(docId: item.id)
+              if filteredReviewItems.isEmpty {
+                VStack(spacing: 12) {
+                  Image(systemName: "checklist")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.quaternary)
+                  Text("No auto-approved initiatives")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                  Text("Lobs reflection approvals will appear here")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 60)
+              } else {
+                ForEach(filteredReviewItems) { item in
+                  ReviewLogRow(item: item, isSelected: selectedReviewItem?.id == item.id) {
+                    selectedReviewItem = item
                   }
-                )
+                }
               }
             }
           }
@@ -298,16 +354,31 @@ struct InboxView: View {
         }
         .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
 
-        // Right: Document viewer
-        if let item = selectedItem {
-          DocumentViewer(item: item, vm: vm)
+        // Right: Detail viewer
+        if paneMode == .inbox {
+          if let item = selectedItem {
+            DocumentViewer(item: item, vm: vm)
+              .frame(minWidth: 500, idealWidth: 700)
+          } else {
+            VStack(spacing: 12) {
+              Image(systemName: "doc.text")
+                .font(.system(size: 40))
+                .foregroundStyle(.quaternary)
+              Text("Select a document to read")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
+        } else if let item = selectedReviewItem {
+          InitiativeReviewDetail(item: item)
             .frame(minWidth: 500, idealWidth: 700)
         } else {
           VStack(spacing: 12) {
-            Image(systemName: "doc.text")
+            Image(systemName: "text.page")
               .font(.system(size: 40))
               .foregroundStyle(.quaternary)
-            Text("Select a document to read")
+            Text("Select an initiative to review")
               .font(.callout)
               .foregroundStyle(.tertiary)
           }
@@ -325,17 +396,34 @@ struct InboxView: View {
       .frame(width: 0, height: 0)
     }
     .onAppear {
-      if !didApplyInitialSelection, let targetId = initialSelectedItemId,
-         let item = vm.inboxItems.first(where: { $0.id == targetId }) {
-        selectedItem = item
-        vm.markInboxItemRead(item)
-        vm.ensureInboxItemContentLoaded(docId: item.id)
-        didApplyInitialSelection = true
+      vm.loadInitiativeReviewLog()
+
+      if !didApplyInitialSelection, let targetId = initialSelectedItemId {
+        if let item = vm.inboxItems.first(where: { $0.id == targetId }) {
+          paneMode = .inbox
+          selectedItem = item
+          vm.markInboxItemRead(item)
+          vm.ensureInboxItemContentLoaded(docId: item.id)
+          didApplyInitialSelection = true
+        } else if let reviewItem = vm.initiativeReviewLog.first(where: { $0.id == targetId }) {
+          paneMode = .reviewLog
+          selectedReviewItem = reviewItem
+          didApplyInitialSelection = true
+        }
+      }
+    }
+    .onChange(of: paneMode) { newMode in
+      if newMode == .reviewLog {
+        vm.loadInitiativeReviewLog()
+        if selectedReviewItem == nil {
+          selectedReviewItem = filteredReviewItems.first
+        }
       }
     }
   }
 
   private func selectAdjacentItem(direction: Int) {
+    guard paneMode == .inbox else { return }
     let items = filteredItems
     guard !items.isEmpty else { return }
 
@@ -353,6 +441,119 @@ struct InboxView: View {
       selectedItem = item
       vm.markInboxItemRead(item)
       vm.ensureInboxItemContentLoaded(docId: item.id)
+    }
+  }
+}
+
+private struct ReviewLogRow: View {
+  let item: InitiativeReviewItem
+  let isSelected: Bool
+  let onSelect: () -> Void
+
+  private var decisionColor: Color {
+    switch item.status.lowercased() {
+    case "approved": return .green
+    case "deferred": return .orange
+    case "rejected": return .red
+    default: return .secondary
+    }
+  }
+
+  var body: some View {
+    Button(action: onSelect) {
+      VStack(alignment: .leading, spacing: 6) {
+        HStack {
+          Text(item.title)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .lineLimit(2)
+          Spacer()
+          Text(item.status.capitalized)
+            .font(.caption)
+            .foregroundStyle(decisionColor)
+        }
+
+        Text(item.category)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+
+        if let summary = item.decisionSummary, !summary.isEmpty {
+          Text(summary)
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .lineLimit(2)
+        }
+      }
+      .padding(10)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(isSelected ? Color.blue.opacity(0.12) : ITheme.subtle)
+      .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+    .buttonStyle(.plain)
+  }
+}
+
+private struct InitiativeReviewDetail: View {
+  let item: InitiativeReviewItem
+
+  private var createdText: String {
+    guard let createdAt = item.createdAt else { return "Unknown" }
+    return createdAt.formatted(date: .abbreviated, time: .shortened)
+  }
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 14) {
+        Text(item.title)
+          .font(.title3)
+          .fontWeight(.bold)
+
+        HStack(spacing: 10) {
+          Label(item.status.capitalized, systemImage: "checkmark.seal")
+          Label(item.proposedByAgent.capitalized, systemImage: "person.crop.circle")
+          if let selectedAgent = item.selectedAgent, !selectedAgent.isEmpty {
+            Label(selectedAgent.capitalized, systemImage: "person.badge.gearshape")
+          }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+        Text("Created: \(createdText)")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+
+        Divider()
+
+        Group {
+          Text("Agent Proposal")
+            .font(.headline)
+          Text(item.description?.isEmpty == false ? item.description! : "No proposal body was provided.")
+            .font(.body)
+            .textSelection(.enabled)
+        }
+
+        Divider()
+
+        Group {
+          Text("Lobs Decision Notes")
+            .font(.headline)
+          Text(item.decisionSummary?.isEmpty == false ? item.decisionSummary! : "No decision summary recorded.")
+            .font(.body)
+            .textSelection(.enabled)
+
+          if let feedback = item.learningFeedback, !feedback.isEmpty {
+            Text("Additional Comments")
+              .font(.subheadline)
+              .fontWeight(.semibold)
+              .padding(.top, 4)
+            Text(feedback)
+              .font(.body)
+              .textSelection(.enabled)
+          }
+        }
+      }
+      .padding(18)
     }
   }
 }

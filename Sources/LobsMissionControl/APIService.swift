@@ -847,6 +847,26 @@ final class APIService {
       path: "/api/orchestrator/status"
     )
   }
+
+  func loadInitiativeReviewLog(limit: Int = 200) async throws -> [InitiativeReviewItem] {
+    struct InitiativesResponse: Decodable {
+      let items: [InitiativeReviewItem]
+    }
+
+    let response: InitiativesResponse = try await request(
+      method: "GET",
+      path: "/api/orchestrator/intelligence/initiatives",
+      queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+    )
+
+    return response.items
+      .filter { item in
+        let status = item.status.lowercased()
+        let approvedByLobs = (item.approvedBy ?? "").lowercased() == "lobs"
+        return approvedByLobs && ["approved", "deferred", "rejected"].contains(status)
+      }
+      .sorted { ($0.updatedAt ?? $0.createdAt ?? .distantPast) > ($1.updatedAt ?? $1.createdAt ?? .distantPast) }
+  }
   
   // MARK: - Agent Statuses
   

@@ -132,8 +132,8 @@ struct CommandCenterView: View {
       }
     }
     
-    // Inbox items
-    for item in vm.inboxItems where item.modifiedAt >= weekAgo {
+    // Action-required inbox items only (exclude system/state entries)
+    for item in vm.inboxItems where item.modifiedAt >= weekAgo && item.relativePath.hasPrefix("inbox/") {
       events.append(.inboxItem(item))
     }
     
