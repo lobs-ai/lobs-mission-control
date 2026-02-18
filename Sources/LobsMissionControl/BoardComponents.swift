@@ -2392,10 +2392,6 @@ struct AddTaskSheet: View {
   @State private var notes: String = ""
   @State private var selectedProjectId: String
   @State private var selectedAgent: String = "programmer"
-  @State private var selectedTrackingMode: TaskTrackingMode = .inbox
-  @State private var githubIssueNumberText: String = ""
-  @State private var githubIssueUrlText: String = ""
-  @State private var githubIssueStateText: String = "open"
   @State private var shakeTitle: Bool = false
   @State private var shakeProject: Bool = false
   
@@ -2511,30 +2507,6 @@ struct AddTaskSheet: View {
         .buttonStyle(.plain)
       }
 
-      VStack(alignment: .leading, spacing: 8) {
-        Text("Tracking")
-          .font(.callout)
-          .fontWeight(.medium)
-
-        Picker("Tracking", selection: $selectedTrackingMode) {
-          ForEach(TaskTrackingMode.allCases, id: \.self) { mode in
-            Text(mode.displayName).tag(mode)
-          }
-        }
-        .pickerStyle(.segmented)
-
-        if selectedTrackingMode == .github {
-          HStack(spacing: 8) {
-            TextField("Issue # (optional)", text: $githubIssueNumberText)
-              .textFieldStyle(.roundedBorder)
-              .frame(maxWidth: 160)
-            TextField("Issue URL (optional)", text: $githubIssueUrlText)
-              .textFieldStyle(.roundedBorder)
-          }
-          TextField("Issue state (open/closed)", text: $githubIssueStateText)
-            .textFieldStyle(.roundedBorder)
-        }
-      }
 
       VStack(alignment: .leading, spacing: 8) {
         Text("Title")
@@ -2596,19 +2568,11 @@ struct AddTaskSheet: View {
             return
           }
 
-          let issueNumber = Int(githubIssueNumberText.trimmingCharacters(in: .whitespacesAndNewlines))
-          let issueURL = githubIssueUrlText.trimmingCharacters(in: .whitespacesAndNewlines)
-          let issueState = githubIssueStateText.trimmingCharacters(in: .whitespacesAndNewlines)
-
           vm.submitTaskToLobs(
             title: title,
             notes: notes.isEmpty ? nil : notes,
             agent: selectedAgent,
             projectId: targetProjectId,
-            trackingMode: selectedTrackingMode,
-            githubIssueNumber: selectedTrackingMode == .github ? issueNumber : nil,
-            githubIssueUrl: selectedTrackingMode == .github ? (issueURL.isEmpty ? nil : issueURL) : nil,
-            githubIssueState: selectedTrackingMode == .github ? (issueState.isEmpty ? "open" : issueState) : nil,
             autoPush: autoPush
           )
           dismiss()

@@ -2659,10 +2659,6 @@ final class AppViewModel: ObservableObject {
     notes: String?,
     agent: String?,
     projectId: String?,
-    trackingMode: TaskTrackingMode = .inbox,
-    githubIssueNumber: Int? = nil,
-    githubIssueUrl: String? = nil,
-    githubIssueState: String? = nil,
     autoPush: Bool
   ) {
     let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2700,11 +2696,11 @@ final class AppViewModel: ObservableObject {
       startedAt: now,
       finishedAt: nil,
       agent: agent,
-      trackingMode: trackingMode,
-      githubIssueNumber: githubIssueNumber,
-      githubIssueUrl: githubIssueUrl,
-      githubIssueState: githubIssueState,
-      githubSyncedAt: githubIssueUrl == nil ? nil : now,
+      trackingMode: nil,
+      githubIssueNumber: nil,
+      githubIssueUrl: nil,
+      githubIssueState: nil,
+      githubSyncedAt: nil,
       workspaceContext: workspaceContext,
       userContext: userContext
     )
@@ -2733,11 +2729,6 @@ final class AppViewModel: ObservableObject {
           reviewState: .approved,
           notes: trimmedNotes,
           agent: agent,
-          trackingMode: trackingMode,
-          githubIssueNumber: githubIssueNumber,
-          githubIssueUrl: githubIssueUrl,
-          githubIssueState: githubIssueState,
-          githubSyncedAt: githubIssueUrl == nil ? nil : now,
           workspaceContext: workspaceContext,
           userContext: userContext
         )
