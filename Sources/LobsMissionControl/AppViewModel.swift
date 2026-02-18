@@ -1525,13 +1525,8 @@ final class AppViewModel: ObservableObject {
   func loadResearchRequests() {
     Task {
       do {
-        // Load research requests from all projects
-        var allRequests: [ResearchRequest] = []
-        for project in projects {
-          let requests = try await api.loadResearchRequests(projectId: project.id)
-          allRequests.append(contentsOf: requests)
-        }
-        
+        // Includes project-linked and topic-only requests.
+        let allRequests = try await api.loadAllResearchRequests()
         await MainActor.run {
           self.researchRequests = allRequests
         }

@@ -1858,8 +1858,8 @@ private struct ConvertToProjectSheet: View {
         
         // Link project to topic if requested
         if linkToTopic {
-          // TODO: API call to link project to topic (needs backend support)
-          // For now, the topic.linkedProjectId is set on the topic side
+          _ = try await vm.api.linkTopicToProject(topicId: topic.id, projectId: projectId)
+          await vm.loadTopics()
         }
         
         await MainActor.run {

@@ -773,6 +773,22 @@ final class APIService {
       body: body
     )
   }
+
+  func linkTopicToProject(topicId: String, projectId: String) async throws -> Topic {
+    struct TopicUpdateRequest: Codable {
+      let linkedProjectId: String
+
+      enum CodingKeys: String, CodingKey {
+        case linkedProjectId = "linked_project_id"
+      }
+    }
+
+    return try await request(
+      method: "PUT",
+      path: "/api/topics/\(topicId)",
+      body: TopicUpdateRequest(linkedProjectId: projectId)
+    )
+  }
   
   func createResearchRequestForTopic(topicId: String, prompt: String) async throws -> ResearchRequest {
     struct CreateRequestBody: Codable {
@@ -1107,6 +1123,14 @@ final class APIService {
     return try await request(
       method: "GET",
       path: "/api/research/\(projectId)/requests",
+      queryItems: [URLQueryItem(name: "limit", value: "1000")]
+    )
+  }
+
+  func loadAllResearchRequests() async throws -> [ResearchRequest] {
+    return try await request(
+      method: "GET",
+      path: "/api/research/requests",
       queryItems: [URLQueryItem(name: "limit", value: "1000")]
     )
   }
