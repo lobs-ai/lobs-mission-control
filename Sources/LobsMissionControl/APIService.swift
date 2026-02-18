@@ -158,7 +158,7 @@ final class APIService {
     return e
   }
   
-  private func request<T: Decodable>(
+  func request<T: Decodable>(
     method: String,
     path: String,
     queryItems: [URLQueryItem]? = nil,
@@ -218,7 +218,7 @@ final class APIService {
     }
   }
   
-  private func requestVoid(
+  func requestVoid(
     method: String,
     path: String,
     queryItems: [URLQueryItem]? = nil,
@@ -471,11 +471,6 @@ final class APIService {
     reviewState: ReviewState? = .pending,
     notes: String?,
     agent: String? = nil,
-    trackingMode: TaskTrackingMode? = nil,
-    githubIssueNumber: Int? = nil,
-    githubIssueUrl: String? = nil,
-    githubIssueState: String? = nil,
-    githubSyncedAt: Date? = nil,
     workspaceContext: String? = nil,
     userContext: String? = nil
   ) async throws -> DashboardTask {
@@ -489,11 +484,11 @@ final class APIService {
       projectId: projectId,
       notes: notes,
       agent: agent,
-      trackingMode: trackingMode?.rawValue,
-      githubIssueNumber: githubIssueNumber,
-      githubIssueUrl: githubIssueUrl,
-      githubIssueState: githubIssueState,
-      githubSyncedAt: githubSyncedAt,
+      trackingMode: nil,
+      githubIssueNumber: nil,
+      githubIssueUrl: nil,
+      githubIssueState: nil,
+      githubSyncedAt: nil,
       workspaceContext: workspaceContext,
       userContext: userContext
     )
