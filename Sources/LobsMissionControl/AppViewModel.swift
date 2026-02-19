@@ -555,6 +555,25 @@ final class AppViewModel: ObservableObject {
   private var lastControlRepoStatusCheck: Date? = nil
   private var lastPendingChangesUpdate: Date? = nil
 
+  // MARK: - Pending task creates (outbox)
+
+  private struct PendingTaskCreate: Codable, Identifiable {
+    let id: String
+    let title: String
+    let notes: String?
+    let projectId: String?
+    let agent: String?
+    let workspaceContext: String?
+    let userContext: String?
+    let createdAt: Date
+  }
+
+  private var pendingTaskCreates: [PendingTaskCreate] = []
+
+  private var pendingTaskCreatesURL: URL {
+    LobsPaths.appSupport.appendingPathComponent("pending-task-creates.json")
+  }
+
   init() {
     // Load config from ConfigManager (includes automatic migration from UserDefaults)
     let loadedConfig = ConfigManager.load()
@@ -590,6 +609,20 @@ final class AppViewModel: ObservableObject {
     
     applyAppearance()
     startAutoRefreshIfNeeded()
+
+    // Load any task creates that were queued while offline, and try to flush them immediately.
+    loadPendingTaskCreates()
+    Task { [weak self] in
+      guard let self else { return }
+      await self.flushPendingTaskCreates()
+    }
+
+    // IMPORTANT: load tasks/projects immediately on launch.
+    // Without an initial reload, the UI can look like newly-created tasks "disappeared"
+    // until the first auto-refresh tick.
+    Task { @MainActor [weak self] in
+      self?.silentReload()
+    }
 
     // Load documents immediately on launch (don't wait for first refresh)
     if repoURL != nil {
@@ -774,11 +807,21 @@ final class AppViewModel: ObservableObject {
           isGitHubSyncing = false
         }
 
+        var newTasks = data.tasks
+
+        // Merge pending tasks that haven't synced yet so they don't disappear from UI
+        let loadedIds = Set(newTasks.map { $0.id })
+        for p in self.pendingTaskCreates {
+          if !loadedIds.contains(p.id) {
+            newTasks.append(self.taskFromPending(p))
+          }
+        }
+
         // Only update if something changed (avoid UI flicker).
-        if data.tasks.map({ $0.id }).sorted() != tasks.map({ $0.id }).sorted()
-          || data.tasks.map({ $0.updatedAt }) != tasks.map({ $0.updatedAt })
-          || data.tasks.map({ $0.status.rawValue }) != tasks.map({ $0.status.rawValue }) {
-          tasks = data.tasks
+        if newTasks.map({ $0.id }).sorted() != tasks.map({ $0.id }).sorted()
+          || newTasks.map({ $0.updatedAt }) != tasks.map({ $0.updatedAt })
+          || newTasks.map({ $0.status.rawValue }) != tasks.map({ $0.status.rawValue }) {
+          tasks = newTasks
           loadArtifactForSelected()
         }
 
@@ -1264,9 +1307,19 @@ final class AppViewModel: ObservableObject {
         }
 
         // Update tasks
-        tasks = data.tasks
+        var newTasks = data.tasks
+
+        // Merge pending tasks that haven't synced yet so they don't disappear from UI
+        let loadedIds = Set(newTasks.map { $0.id })
+        for p in self.pendingTaskCreates {
+          if !loadedIds.contains(p.id) {
+            newTasks.append(self.taskFromPending(p))
+          }
+        }
+
+        tasks = newTasks
         lastError = nil
-        
+
         loadArtifactForSelected()
 
         // Refresh cached Overview stats (runs in background)
@@ -2458,6 +2511,129 @@ final class AppViewModel: ObservableObject {
     }
   }
 
+  // MARK: - Pending task creates (outbox)
+
+  private func loadPendingTaskCreates() {
+    do {
+      try LobsPaths.ensureAppSupportExists()
+      guard FileManager.default.fileExists(atPath: pendingTaskCreatesURL.path) else {
+        pendingTaskCreates = []
+        return
+      }
+      let data = try Data(contentsOf: pendingTaskCreatesURL)
+      pendingTaskCreates = try JSONDecoder().decode([PendingTaskCreate].self, from: data)
+    } catch {
+      print("⚠️ Failed to load pending task creates: \(error)")
+      pendingTaskCreates = []
+    }
+  }
+
+  private func savePendingTaskCreates() {
+    do {
+      try LobsPaths.ensureAppSupportExists()
+      let data = try JSONEncoder().encode(pendingTaskCreates)
+      try data.write(to: pendingTaskCreatesURL, options: [.atomic])
+    } catch {
+      print("⚠️ Failed to save pending task creates: \(error)")
+    }
+  }
+
+  private func enqueuePendingTaskCreate(
+    id: String,
+    title: String,
+    notes: String?,
+    projectId: String?,
+    agent: String?,
+    workspaceContext: String?,
+    userContext: String?
+  ) {
+    // De-dupe by id (can happen if user retries and we already queued it)
+    if pendingTaskCreates.contains(where: { $0.id == id }) { return }
+
+    pendingTaskCreates.append(PendingTaskCreate(
+      id: id,
+      title: title,
+      notes: notes,
+      projectId: projectId,
+      agent: agent,
+      workspaceContext: workspaceContext,
+      userContext: userContext,
+      createdAt: Date()
+    ))
+    savePendingTaskCreates()
+  }
+
+  private func taskFromPending(_ p: PendingTaskCreate) -> DashboardTask {
+    DashboardTask(
+      id: p.id,
+      title: p.title,
+      status: .active,
+      owner: .lobs,
+      createdAt: p.createdAt,
+      updatedAt: p.createdAt,
+      workState: .notStarted,
+      reviewState: .approved,
+      projectId: p.projectId,
+      artifactPath: nil,
+      notes: p.notes,
+      startedAt: nil,
+      finishedAt: nil,
+      agent: p.agent,
+      trackingMode: nil,
+      githubIssueNumber: nil,
+      githubIssueUrl: nil,
+      githubIssueState: nil,
+      githubSyncedAt: nil,
+      workspaceContext: p.workspaceContext,
+      userContext: p.userContext
+    )
+  }
+
+  /// Best-effort: try to flush any tasks that were created while offline / unauthenticated.
+  /// This runs on launch and periodically via refresh.
+  func flushPendingTaskCreates() async {
+    guard !pendingTaskCreates.isEmpty else { return }
+
+    // Don’t hammer the server if we're already syncing.
+    // Also avoids racing against user-initiated creates.
+    if isGitBusy { return }
+    isGitBusy = true
+
+    let snapshot = pendingTaskCreates
+    var succeededIds = Set<String>()
+
+    for pending in snapshot {
+      do {
+        let _ = try await api.addTask(
+          id: pending.id,
+          title: pending.title,
+          owner: .lobs,
+          status: .active,
+          projectId: pending.projectId,
+          workState: .notStarted,
+          reviewState: .approved,
+          notes: pending.notes,
+          agent: pending.agent,
+          workspaceContext: pending.workspaceContext,
+          userContext: pending.userContext
+        )
+        succeededIds.insert(pending.id)
+      } catch {
+        // If we can't auth, keep everything in queue; user needs to fix Settings.
+      }
+    }
+
+    if !succeededIds.isEmpty {
+      pendingTaskCreates.removeAll { succeededIds.contains($0.id) }
+      savePendingTaskCreates()
+
+      // Pull fresh tasks so the newly flushed tasks appear immediately.
+      silentReload()
+    }
+    
+    isGitBusy = false
+  }
+
   // MARK: - Notification Management
 
   func postNotification(type: NotificationType, message: String) {
@@ -2684,6 +2860,14 @@ final class AppViewModel: ObservableObject {
       guard let value = projectId?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
       return value
     }()
+
+    // If caller didn't provide a projectId, default to the currently-selected project *only if*
+    // we actually know about it (avoid sending a non-existent "default" placeholder and getting 404).
+    let effectiveProjectId: String? = {
+      if let normalizedProjectId { return normalizedProjectId }
+      if projects.contains(where: { $0.id == selectedProjectId }) { return selectedProjectId }
+      return nil
+    }()
     let onboardingState = OnboardingStateManager.load()
     let workspaceContext: String? = {
       guard let value = onboardingState.workspace?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
@@ -2707,7 +2891,7 @@ final class AppViewModel: ObservableObject {
       updatedAt: now,
       workState: .notStarted,
       reviewState: .approved,
-      projectId: normalizedProjectId,
+      projectId: effectiveProjectId,
       artifactPath: nil,
       notes: trimmedNotes,
       startedAt: now,
@@ -2732,6 +2916,17 @@ final class AppViewModel: ObservableObject {
     // Ensure the newly-created task is selected (but don't auto-open detail view)
     selectedTaskId = newTask.id
 
+    // Write-through outbox entry immediately so quit/restart can't lose the create.
+    enqueuePendingTaskCreate(
+      id: newTask.id,
+      title: trimmedTitle,
+      notes: trimmedNotes,
+      projectId: normalizedProjectId,
+      agent: agent,
+      workspaceContext: workspaceContext,
+      userContext: userContext
+    )
+
     // Save via API
     isGitBusy = true
     Task {
@@ -2741,7 +2936,7 @@ final class AppViewModel: ObservableObject {
           title: trimmedTitle,
           owner: .lobs,
           status: .active,
-          projectId: normalizedProjectId,
+          projectId: effectiveProjectId,
           workState: .notStarted,
           reviewState: .approved,
           notes: trimmedNotes,
@@ -2754,11 +2949,33 @@ final class AppViewModel: ObservableObject {
           if let idx = self.tasks.firstIndex(where: { $0.id == newTask.id }) {
             self.tasks[idx] = savedTask
           }
+
+          // If this was previously queued, clear it.
+          if self.pendingTaskCreates.contains(where: { $0.id == newTask.id }) {
+            self.pendingTaskCreates.removeAll { $0.id == newTask.id }
+            self.savePendingTaskCreates()
+          }
+
           self.isGitBusy = false
         }
       } catch {
         await MainActor.run {
-          self.flashError("Failed to save task: \(error.localizedDescription)")
+          // Queue for retry on next launch/refresh so tasks don't "disappear" after restart.
+          self.enqueuePendingTaskCreate(
+            id: newTask.id,
+            title: trimmedTitle,
+            notes: trimmedNotes,
+            projectId: normalizedProjectId,
+            agent: agent,
+            workspaceContext: workspaceContext,
+            userContext: userContext
+          )
+
+          if let apiError = error as? APIError, case .notAuthenticated = apiError {
+            self.flashError("Not authenticated — open Settings and add your API token. This task is queued and will sync once auth is fixed.")
+          } else {
+            self.flashError("Failed to save task (queued to retry): \(error.localizedDescription)")
+          }
           self.isGitBusy = false
         }
       }

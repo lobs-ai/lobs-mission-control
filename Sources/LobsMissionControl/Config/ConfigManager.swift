@@ -16,22 +16,58 @@ class ConfigManager {
             do {
                 let data = try Data(contentsOf: configFile)
                 let decoder = JSONDecoder()
+
+                // Current format
                 var config = try decoder.decode(AppConfig.self, from: data)
-                
+
                 // Migrate any remaining UserDefaults on load (belt and suspenders)
-                let migrated = migrateUserDefaults()
-                if let migrated = migrated {
+                if let migrated = migrateUserDefaults() {
                     config.settings = mergeSettings(existing: config.settings, migrated: migrated)
                 }
-                
+
                 return config
             } catch {
-                // If decode fails, try to recover by migrating from UserDefaults
+                // If decode fails, try legacy formats before falling back.
                 print("⚠️ Failed to decode config from \(configFile.path): \(error)")
+
+                // Legacy (pre-server) config.json used for git-based control repo settings.
+                struct LegacyConfigV1: Decodable {
+                    var onboardingComplete: Bool?
+                    var controlRepoPath: String?
+                    var controlRepoUrl: String?
+                    var settings: UserSettings?
+                }
+
+                if let data = try? Data(contentsOf: configFile),
+                   let legacy = try? JSONDecoder().decode(LegacyConfigV1.self, from: data) {
+
+                    var migratedSettings = legacy.settings ?? UserSettings()
+                    if let ud = migrateUserDefaults() {
+                        migratedSettings = mergeSettings(existing: migratedSettings, migrated: ud)
+                    }
+
+                    // Best-effort: if legacy had a URL-like value, carry it into serverURL.
+                    let legacyUrl = legacy.controlRepoUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let serverURL = (legacyUrl?.hasPrefix("http://") == true || legacyUrl?.hasPrefix("https://") == true)
+                      ? legacyUrl!
+                      : "http://localhost:8000"
+
+                    let migrated = AppConfig(
+                        onboardingComplete: legacy.onboardingComplete ?? false,
+                        serverURL: serverURL,
+                        apiToken: nil,
+                        settings: migratedSettings
+                    )
+
+                    // Persist migration so next launch is clean.
+                    try? save(migrated)
+                    return migrated
+                }
+
                 print("⚠️ Attempting recovery via UserDefaults migration...")
             }
         }
-        
+
         // No config file or decode failed - migrate from UserDefaults if available
         if let migrated = migrateUserDefaults() {
             print("ℹ️ Migrated settings from UserDefaults to \(configFile.path)")
@@ -40,7 +76,7 @@ class ConfigManager {
             try? save(config)
             return config
         }
-        
+
         return nil
     }
     
@@ -149,7 +185,7 @@ class ConfigManager {
     /// - Parameter config: AppConfig to persist
     /// - Throws: File system or encoding errors
     static func save(_ config: AppConfig) throws {
-        // Create ~/.lobs directory if it doesn't exist
+        // Create the Application Support config directory if it doesn't exist
         if !FileManager.default.fileExists(atPath: configDirectory.path) {
             try FileManager.default.createDirectory(
                 at: configDirectory,

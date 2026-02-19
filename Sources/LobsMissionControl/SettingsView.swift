@@ -39,7 +39,6 @@ struct SettingsView: View {
           Text("Configuration")
             .font(.headline)
           
-          if let config = vm.config {
           // Server URL
           VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -244,9 +243,6 @@ struct SettingsView: View {
               Text("This will reset all settings and require you to set up again. Continue?")
             }
           }
-        } else {
-          Text("No configuration found")
-            .foregroundColor(.secondary)
         }
       }
       .padding()
