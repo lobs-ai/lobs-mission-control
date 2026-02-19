@@ -2378,6 +2378,21 @@ private struct EditProjectSheet: View {
 
 // MARK: - Add Task Sheet
 
+enum AddTaskSheetValidation {
+  static func resolveTargetProjectId(explicitProjectId: String?, selectedProjectId: String) -> String? {
+    if let explicitProjectId, !explicitProjectId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      return explicitProjectId
+    }
+
+    let picked = selectedProjectId.trimmingCharacters(in: .whitespacesAndNewlines)
+    return picked.isEmpty ? nil : picked
+  }
+
+  static func missingProject(explicitProjectId: String?, selectedProjectId: String) -> Bool {
+    explicitProjectId == nil && resolveTargetProjectId(explicitProjectId: explicitProjectId, selectedProjectId: selectedProjectId) == nil
+  }
+}
+
 struct AddTaskSheet: View {
   @ObservedObject var vm: AppViewModel
   @Binding var autoPush: Bool
@@ -2441,8 +2456,6 @@ struct AddTaskSheet: View {
             .font(.callout)
             .fontWeight(.medium)
           Picker("Project", selection: $selectedProjectId) {
-            Text("Inbox (No project)")
-              .tag("")
             ForEach(activeProjects) { project in
               HStack(spacing: 6) {
                 Image(systemName: project.resolvedType == .research ? "doc.text.magnifyingglass" : "rectangle.split.3x1")
@@ -2553,17 +2566,27 @@ struct AddTaskSheet: View {
           let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
           let missingTitle = trimmedTitle.isEmpty
           
-          // Project is optional: explicit project from context wins, otherwise picker (empty => inbox/unscoped)
-          let targetProjectId: String? = {
-            if let explicitProjectId = projectId, !explicitProjectId.isEmpty { return explicitProjectId }
-            let picked = selectedProjectId.trimmingCharacters(in: .whitespacesAndNewlines)
-            return picked.isEmpty ? nil : picked
-          }()
+          let targetProjectId = AddTaskSheetValidation.resolveTargetProjectId(
+            explicitProjectId: projectId,
+            selectedProjectId: selectedProjectId
+          )
+          let missingProject = AddTaskSheetValidation.missingProject(
+            explicitProjectId: projectId,
+            selectedProjectId: selectedProjectId
+          )
 
           if missingTitle {
             withAnimation(.default) { shakeTitle = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
               withAnimation { shakeTitle = false }
+            }
+            return
+          }
+
+          if missingProject {
+            withAnimation(.default) { shakeProject = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+              withAnimation { shakeProject = false }
             }
             return
           }
@@ -2586,7 +2609,11 @@ struct AddTaskSheet: View {
         // shake/highlight missing fields instead of silently ignoring the tap.
         .opacity({
           let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-          return trimmedTitle.isEmpty ? 0.55 : 1.0
+          let missingProject = AddTaskSheetValidation.missingProject(
+            explicitProjectId: projectId,
+            selectedProjectId: selectedProjectId
+          )
+          return (trimmedTitle.isEmpty || missingProject) ? 0.55 : 1.0
         }())
       }
     }

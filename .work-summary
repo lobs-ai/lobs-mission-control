@@ -1,1 +1,3 @@
-Fixed calendar week/month view server error by adding missing fields to ScheduledEvent model (fireCount, lastFiredAt, nextFireAt, recurrenceEnd, task fields). Server was returning these fields causing JSON decoding to fail. Build successful (0.13s). Created CalendarRangeDecodingTests.swift with 14 comprehensive tests.
+Added regression coverage for dashboard active-task filtering to ensure `not_started` and `in_progress` statuses are counted while `completed`, `cancelled`, and `archived` are excluded. Updated CommandCenter active counts to consistently use `status.isActiveWork` in all dashboard active-count paths.
+
+Test run status: `swift test --filter TaskStatusActiveWorkTests` and `swift test` are currently blocked by pre-existing duplicate test filename collisions in the repo (SwiftPM multiple producers for AIUsageTrackingTests.swift, AgentPickerTests.swift, TaskNotesResizeTests.swift).

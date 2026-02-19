@@ -8,6 +8,41 @@ enum TaskStatus: Hashable, Codable {
   case waitingOn
   case other(String)
 
+  /// Dashboard "Active Tasks" contract:
+  /// - Includes canonical `active` plus backend workflow states `not_started` and `in_progress`.
+  /// - Excludes terminal/non-active states like completed/rejected/cancelled/archived.
+  var isDashboardActive: Bool {
+    switch self {
+    case .active:
+      return true
+    case .other(let value):
+      return value == "not_started" || value == "in_progress"
+    default:
+      return false
+    }
+  }
+
+  /// Product-level definition of "active work" for dashboard summary surfaces.
+  ///
+  /// Server semantics are primarily `status=active`, but some payloads may surface
+  /// in-progress lifecycle values (`not_started`, `in_progress`) in the status field.
+  /// Treat those as active so Active Tasks lists/counts stay aligned with backend
+  /// active-work expectations.
+  var isActiveWork: Bool {
+    switch self {
+    case .active, .waitingOn:
+      return true
+    case .other(let value):
+      let normalized = value
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+        .replacingOccurrences(of: "-", with: "_")
+      return normalized == "not_started" || normalized == "in_progress"
+    default:
+      return false
+    }
+  }
+
   var rawValue: String {
     switch self {
     case .inbox: return "inbox"

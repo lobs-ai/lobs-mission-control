@@ -26,19 +26,20 @@ struct SettingsView: View {
   }
   
   var body: some View {
-    VStack(alignment: .leading, spacing: 20) {
-      Text("Settings")
-        .font(.title)
-        .fontWeight(.bold)
-      
-      Divider()
-      
-      // Configuration Section
-      VStack(alignment: .leading, spacing: 12) {
-        Text("Configuration")
-          .font(.headline)
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        Text("Settings")
+          .font(.title)
+          .fontWeight(.bold)
         
-        if let config = vm.config {
+        Divider()
+        
+        // Configuration Section
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Configuration")
+            .font(.headline)
+          
+          if let config = vm.config {
           // Server URL
           VStack(alignment: .leading, spacing: 8) {
             HStack {
