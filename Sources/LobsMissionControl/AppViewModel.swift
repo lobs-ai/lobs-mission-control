@@ -565,6 +565,7 @@ final class AppViewModel: ObservableObject {
     let agent: String?
     let workspaceContext: String?
     let userContext: String?
+    let modelTier: String?
     let createdAt: Date
   }
 
@@ -2545,7 +2546,8 @@ final class AppViewModel: ObservableObject {
     projectId: String?,
     agent: String?,
     workspaceContext: String?,
-    userContext: String?
+    userContext: String?,
+    modelTier: String?
   ) {
     // De-dupe by id (can happen if user retries and we already queued it)
     if pendingTaskCreates.contains(where: { $0.id == id }) { return }
@@ -2558,6 +2560,7 @@ final class AppViewModel: ObservableObject {
       agent: agent,
       workspaceContext: workspaceContext,
       userContext: userContext,
+      modelTier: modelTier,
       createdAt: Date()
     ))
     savePendingTaskCreates()
@@ -2585,7 +2588,8 @@ final class AppViewModel: ObservableObject {
       githubIssueState: nil,
       githubSyncedAt: nil,
       workspaceContext: p.workspaceContext,
-      userContext: p.userContext
+      userContext: p.userContext,
+      modelTier: p.modelTier
     )
   }
 
@@ -2615,7 +2619,8 @@ final class AppViewModel: ObservableObject {
           notes: pending.notes,
           agent: pending.agent,
           workspaceContext: pending.workspaceContext,
-          userContext: pending.userContext
+          userContext: pending.userContext,
+          modelTier: pending.modelTier
         )
         succeededIds.insert(pending.id)
       } catch {
@@ -2852,7 +2857,8 @@ final class AppViewModel: ObservableObject {
     notes: String?,
     agent: String?,
     projectId: String?,
-    autoPush: Bool
+    autoPush: Bool,
+    modelTier: String? = nil
   ) {
     let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let trimmedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2903,7 +2909,8 @@ final class AppViewModel: ObservableObject {
       githubIssueState: nil,
       githubSyncedAt: nil,
       workspaceContext: workspaceContext,
-      userContext: userContext
+      userContext: userContext,
+      modelTier: modelTier
     )
 
 
@@ -2924,7 +2931,8 @@ final class AppViewModel: ObservableObject {
       projectId: normalizedProjectId,
       agent: agent,
       workspaceContext: workspaceContext,
-      userContext: userContext
+      userContext: userContext,
+      modelTier: modelTier
     )
 
     // Save via API
@@ -2942,7 +2950,8 @@ final class AppViewModel: ObservableObject {
           notes: trimmedNotes,
           agent: agent,
           workspaceContext: workspaceContext,
-          userContext: userContext
+          userContext: userContext,
+          modelTier: modelTier
         )
         await MainActor.run {
           // Update with server response
@@ -2968,7 +2977,8 @@ final class AppViewModel: ObservableObject {
             projectId: normalizedProjectId,
             agent: agent,
             workspaceContext: workspaceContext,
-            userContext: userContext
+            userContext: userContext,
+            modelTier: nil
           )
 
           if let apiError = error as? APIError, case .notAuthenticated = apiError {

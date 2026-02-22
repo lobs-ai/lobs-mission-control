@@ -1482,6 +1482,25 @@ private struct TaskDetailSheet: View {
               .font(.subheadline.bold())
           }
           
+          if let agent = task.agent {
+            HStack {
+              Text("Agent:")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+              Text(agent.capitalized)
+                .font(.subheadline.bold())
+            }
+          }
+          
+          if let modelTier = task.modelTier {
+            HStack {
+              Text("Model Tier:")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+              ModelTierBadge(tier: modelTier)
+            }
+          }
+          
           if let notes = task.notes, !notes.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
               Text("Notes:")

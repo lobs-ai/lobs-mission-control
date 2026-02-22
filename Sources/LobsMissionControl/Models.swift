@@ -235,7 +235,8 @@ struct DashboardTask: Codable, Identifiable, Hashable {
     githubIssueState: String? = nil,
     githubSyncedAt: Date? = nil,
     workspaceContext: String? = nil,
-    userContext: String? = nil
+    userContext: String? = nil,
+    modelTier: String? = nil
   ) {
     self.id = id
     self.title = title
@@ -262,6 +263,7 @@ struct DashboardTask: Codable, Identifiable, Hashable {
     self.githubSyncedAt = githubSyncedAt
     self.workspaceContext = workspaceContext
     self.userContext = userContext
+    self.modelTier = modelTier
   }
 
   // Optional fields (schema evolves)
@@ -310,6 +312,9 @@ struct DashboardTask: Codable, Identifiable, Hashable {
   /// Optional server-provided context metadata.
   var workspaceContext: String?
   var userContext: String?
+
+  /// Model tier for agent execution (local/cheap/standard/strong, nil = auto).
+  var modelTier: String?
 
   /// Resolved owner (defaults to .lobs for backwards compatibility when server returns null).
   var resolvedOwner: TaskOwner { owner ?? .lobs }

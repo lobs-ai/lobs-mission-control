@@ -2407,6 +2407,7 @@ struct AddTaskSheet: View {
   @State private var notes: String = ""
   @State private var selectedProjectId: String
   @State private var selectedAgent: String = "programmer"
+  @State private var selectedModelTier: String? = nil
   @State private var shakeTitle: Bool = false
   @State private var shakeProject: Bool = false
   
@@ -2520,6 +2521,22 @@ struct AddTaskSheet: View {
         .buttonStyle(.plain)
       }
 
+      // Model tier picker
+      VStack(alignment: .leading, spacing: 8) {
+        Text("Model Tier")
+          .font(.callout)
+          .fontWeight(.medium)
+        
+        Picker("Model Tier", selection: $selectedModelTier) {
+          Text("Auto").tag(nil as String?)
+          Text("Local").tag("local" as String?)
+          Text("Cheap").tag("cheap" as String?)
+          Text("Standard").tag("standard" as String?)
+          Text("Strong").tag("strong" as String?)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+      }
 
       VStack(alignment: .leading, spacing: 8) {
         Text("Title")
@@ -2596,7 +2613,8 @@ struct AddTaskSheet: View {
             notes: notes.isEmpty ? nil : notes,
             agent: selectedAgent,
             projectId: targetProjectId,
-            autoPush: autoPush
+            autoPush: autoPush,
+            modelTier: selectedModelTier
           )
           dismiss()
         } label: {
@@ -3453,5 +3471,38 @@ struct OnboardingSheet: View {
       .padding(.bottom, 24)
     }
     .frame(width: 500, height: 500)
+  }
+}
+
+// MARK: - Model Tier Badge
+
+struct ModelTierBadge: View {
+  let tier: String
+  
+  private var badgeColor: Color {
+    switch tier.lowercased() {
+    case "local": return .green
+    case "cheap": return .blue
+    case "standard": return .purple
+    case "strong": return .orange
+    default: return .gray
+    }
+  }
+  
+  var body: some View {
+    Text(tier.capitalized)
+      .font(.caption2)
+      .fontWeight(.medium)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 3)
+      .background(
+        Capsule()
+          .fill(badgeColor.opacity(0.15))
+      )
+      .foregroundStyle(badgeColor)
+      .overlay(
+        Capsule()
+          .stroke(badgeColor.opacity(0.3), lineWidth: 0.5)
+      )
   }
 }

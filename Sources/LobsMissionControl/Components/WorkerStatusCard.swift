@@ -15,7 +15,12 @@ private struct OverviewTaskRow: View {
           .font(.system(size: 6))
           .foregroundStyle(.secondary)
         VStack(alignment: .leading, spacing: 2) {
-          Text(task.title).font(.body)
+          HStack(spacing: 6) {
+            Text(task.title).font(.body)
+            if let modelTier = task.modelTier {
+              ModelTierBadge(tier: modelTier)
+            }
+          }
           if let proj = projectName {
             Text(proj).font(.caption).foregroundStyle(.secondary)
           }

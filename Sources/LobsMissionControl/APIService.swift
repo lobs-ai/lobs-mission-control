@@ -472,7 +472,8 @@ final class APIService {
     notes: String?,
     agent: String? = nil,
     workspaceContext: String? = nil,
-    userContext: String? = nil
+    userContext: String? = nil,
+    modelTier: String? = nil
   ) async throws -> DashboardTask {
     let create = TaskCreateRequest(
       id: id,
@@ -490,7 +491,8 @@ final class APIService {
       githubIssueState: nil,
       githubSyncedAt: nil,
       workspaceContext: workspaceContext,
-      userContext: userContext
+      userContext: userContext,
+      modelTier: modelTier
     )
     
     return try await request(
@@ -2255,6 +2257,7 @@ private struct TaskCreateRequest: Codable {
   let githubSyncedAt: Date?
   let workspaceContext: String?
   let userContext: String?
+  let modelTier: String?
   
   enum CodingKeys: String, CodingKey {
     case id
@@ -2273,6 +2276,7 @@ private struct TaskCreateRequest: Codable {
     case githubSyncedAt = "github_synced_at"
     case workspaceContext = "workspace_context"
     case userContext = "user_context"
+    case modelTier = "model_tier"
   }
 }
 
@@ -2299,6 +2303,7 @@ private struct TaskUpdateRequest: Codable {
   let githubSyncedAt: Date?
   let workspaceContext: String?
   let userContext: String?
+  let modelTier: String?
   
   init(
     title: String? = nil,
@@ -2322,7 +2327,8 @@ private struct TaskUpdateRequest: Codable {
     githubIssueState: String? = nil,
     githubSyncedAt: Date? = nil,
     workspaceContext: String? = nil,
-    userContext: String? = nil
+    userContext: String? = nil,
+    modelTier: String? = nil
   ) {
     self.title = title
     self.status = status
@@ -2346,6 +2352,7 @@ private struct TaskUpdateRequest: Codable {
     self.githubSyncedAt = githubSyncedAt
     self.workspaceContext = workspaceContext
     self.userContext = userContext
+    self.modelTier = modelTier
   }
   
   init(from task: DashboardTask) {
@@ -2371,6 +2378,7 @@ private struct TaskUpdateRequest: Codable {
     self.githubSyncedAt = task.githubSyncedAt
     self.workspaceContext = task.workspaceContext
     self.userContext = task.userContext
+    self.modelTier = task.modelTier
   }
   
   enum CodingKeys: String, CodingKey {
@@ -2396,5 +2404,6 @@ private struct TaskUpdateRequest: Codable {
     case githubSyncedAt = "github_synced_at"
     case workspaceContext = "workspace_context"
     case userContext = "user_context"
+    case modelTier = "model_tier"
   }
 }
