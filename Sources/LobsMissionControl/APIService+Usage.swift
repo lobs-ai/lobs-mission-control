@@ -3,6 +3,12 @@ import Foundation
 extension APIService {
   // MARK: - Usage Tracking
 
+  func loadUsageDashboard(window: String = "month") async throws -> UsageDashboardResponse {
+    try await request(method: "GET", path: "/api/usage/dashboard", queryItems: [
+      URLQueryItem(name: "window", value: window)
+    ])
+  }
+
   func loadUsageSummary(window: String = "month") async throws -> UsageSummaryResponse {
     try await request(method: "GET", path: "/api/usage/summary", queryItems: [
       URLQueryItem(name: "window", value: window)

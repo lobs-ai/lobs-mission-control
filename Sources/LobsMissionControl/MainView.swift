@@ -10,6 +10,7 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
     case calendar = "Calendar"
     case inbox = "Inbox"
     case status = "Status"
+    case usage = "Usage"
     case settings = "Settings"
     
     var id: String { rawValue }
@@ -25,6 +26,7 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
         case .calendar: return "calendar"
         case .inbox: return "tray.fill"
         case .status: return "chart.bar.fill"
+        case .usage: return "chart.pie.fill"
         case .settings: return "gearshape"
         }
     }
@@ -269,6 +271,15 @@ struct MainView: View {
             } else {
                 Text("API Service not available")
                     .navigationTitle("Status")
+            }
+            
+        case .usage:
+            if let apiService = vm.apiService {
+                UsageView(apiService: apiService, isPresented: $statusPresented)
+                    .navigationTitle("Usage")
+            } else {
+                Text("API Service not available")
+                    .navigationTitle("Usage")
             }
             
         case .settings:

@@ -207,3 +207,9 @@ git config user.name "Lobs (Worker)"
 ---
 
 **Remember:** This is a clean, organized codebase. Keep it that way. No clutter, no fix docs in root, no docs/ directory. Write code, commit, move on.
+
+## Shared Documentation
+
+Query shared docs via memory search. Index at `/Users/lobs/lobs-server/docs/INDEX.md`.
+
+Key docs: system-overview, memory-system, agent-lifecycle, coding-standards, git-workflow, model-routing, orchestrator.

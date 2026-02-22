@@ -1314,3 +1314,68 @@ struct CalendarRangeResponse: Codable {
   var endDate: String    // YYYY-MM-DD format
   var days: [CalendarDayEvents]
 }
+
+// MARK: - Usage Dashboard
+
+struct UsageTotals: Codable {
+  var taskCount: Int
+  var requests: Int
+  var inputTokens: Int
+  var outputTokens: Int
+  var cachedTokens: Int
+  var totalTokens: Int
+  var estimatedCostUsd: Double
+}
+
+struct UsageByProvider: Codable, Identifiable {
+  var provider: String
+  var taskCount: Int
+  var requests: Int
+  var inputTokens: Int
+  var outputTokens: Int
+  var cachedTokens: Int
+  var totalTokens: Int
+  var estimatedCostUsd: Double
+  var avgLatencyMs: Double?
+  var errorCount: Int
+  
+  var id: String { provider }
+}
+
+struct UsageByModel: Codable, Identifiable {
+  var provider: String
+  var model: String
+  var routeType: String
+  var taskCount: Int
+  var requests: Int
+  var inputTokens: Int
+  var outputTokens: Int
+  var cachedTokens: Int
+  var totalTokens: Int
+  var estimatedCostUsd: Double
+  var avgLatencyMs: Double?
+  
+  var id: String { "\(provider)::\(model)::\(routeType)" }
+}
+
+struct UsageDailySeries: Codable, Identifiable {
+  var date: String
+  var provider: String
+  var taskCount: Int
+  var inputTokens: Int
+  var outputTokens: Int
+  var totalTokens: Int
+  var estimatedCostUsd: Double
+  
+  var id: String { "\(date)::\(provider)" }
+}
+
+struct UsageDashboardResponse: Codable {
+  var window: String
+  var periodStart: Date
+  var periodEnd: Date
+  var totals: UsageTotals
+  var byProvider: [UsageByProvider]
+  var byModel: [UsageByModel]
+  var dailySeries: [UsageDailySeries]
+}
