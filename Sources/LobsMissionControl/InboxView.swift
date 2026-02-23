@@ -99,6 +99,7 @@ struct InboxView: View {
   @ObservedObject var vm: AppViewModel
   @Binding var isPresented: Bool
   var initialSelectedItemId: String? = nil
+  var onNavigateToTasks: (() -> Void)? = nil
 
   @State private var paneMode: PaneMode = .inbox
   @State private var selectedItem: InboxItem? = nil
@@ -145,6 +146,9 @@ struct InboxView: View {
           || item.summary.lowercased().contains(q)
       }
     }
+
+    // Sort by date (newest first) — unread bubble to top naturally since they're recent
+    items.sort { $0.modifiedAt > $1.modifiedAt }
 
     return items
   }
@@ -399,6 +403,7 @@ struct InboxView: View {
             if let taskId = item.taskId,
                let task = vm.tasks.first(where: { $0.id == taskId }) {
               vm.selectTask(task)
+              onNavigateToTasks?()
               isPresented = false
             }
           })
