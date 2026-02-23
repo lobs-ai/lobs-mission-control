@@ -312,6 +312,9 @@ final class AppViewModel: ObservableObject {
   // Agent Status
   @Published var agentStatuses: [String: AgentStatus] = [:]
   @Published var selectedAgentType: String? = nil
+  
+  // Intelligence Summary
+  @Published var intelligenceSummary: IntelligenceSummary? = nil
 
   // Main Session Usage
   @Published var mainSessionUsage: MainSessionUsage? = nil
@@ -844,6 +847,7 @@ final class AppViewModel: ObservableObject {
         await self.loadWorkerStatusAsync()
         await self.loadAgentStatusesAsync()
         await self.loadAgentDocumentsAsync()
+        await self.loadIntelligenceSummaryAsync()
       }
 
       // Check for updates in background (low priority)
@@ -2093,6 +2097,11 @@ final class AppViewModel: ObservableObject {
       item.relativePath.hasPrefix("inbox/") &&
       (!item.isRead || unreadFollowupCount(docId: item.id) > 0)
     }.count
+  }
+  
+  /// Count of pending intelligence reviews (initiatives awaiting decision)
+  var pendingIntelligenceReviews: Int {
+    intelligenceSummary?.pendingReviews ?? 0
   }
 
   // REMOVED: inboxResponseText() - dead code (never called), replaced by inboxThreadsByDocId
@@ -4140,6 +4149,17 @@ final class AppViewModel: ObservableObject {
       }
     } catch {
       print("⚠️ Failed to load agent statuses: \(error)")
+    }
+  }
+  
+  private func loadIntelligenceSummaryAsync() async {
+    do {
+      let summary = try await api.fetchIntelligenceSummary()
+      await MainActor.run {
+        self.intelligenceSummary = summary
+      }
+    } catch {
+      print("⚠️ Failed to load intelligence summary: \(error)")
     }
   }
 

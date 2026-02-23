@@ -370,7 +370,7 @@ struct TasksContainerView: View {
         if vm.showOverview {
             overviewContent
         } else if vm.isResearchProject {
-            ResearchDocView(vm: vm)
+            ResearchRedirectView()
                 .id("research-\(vm.selectedProjectId)")
         } else if vm.isTrackerProject {
             TrackerBoardView(vm: vm)
@@ -894,5 +894,61 @@ private struct QuickActionButton: View {
         }
         .buttonStyle(.plain)
         .onHover { h in isHovering = h }
+    }
+}
+
+// MARK: - Research Redirect View
+
+/// Displays a message directing users to the unified Knowledge tab for research content.
+private struct ResearchRedirectView: View {
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "books.vertical.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(.blue.gradient)
+            
+            VStack(spacing: 12) {
+                Text("Research Has Moved")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Text("Research content is now available in the unified Knowledge tab")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                Text("View research findings, documents, and designs all in one place")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+            
+            HStack(spacing: 16) {
+                // Note: In a real implementation, this would navigate to the Knowledge tab
+                // For now, we just show the message. The user can click "Knowledge" in the sidebar.
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 14))
+                        Text("Navigate to")
+                            .font(.subheadline)
+                        Image(systemName: "books.vertical.fill")
+                            .font(.system(size: 14))
+                        Text("Knowledge")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Text("in the sidebar")
+                            .font(.subheadline)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(Color.blue.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
     }
 }

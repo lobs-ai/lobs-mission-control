@@ -9,6 +9,7 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
     case workTracker = "Work Tracker"
     case calendar = "Calendar"
     case inbox = "Inbox"
+    case intelligence = "Intelligence"
     case status = "Status"
     case usage = "Usage"
     case settings = "Settings"
@@ -25,6 +26,7 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
         case .workTracker: return "clock.badge.checkmark.fill"
         case .calendar: return "calendar"
         case .inbox: return "tray.fill"
+        case .intelligence: return "brain.fill"
         case .status: return "chart.bar.fill"
         case .usage: return "chart.pie.fill"
         case .settings: return "gearshape"
@@ -43,7 +45,6 @@ struct MainView: View {
     // Bindings for views that need isPresented
     @State private var inboxPresented: Bool = true
     @State private var statusPresented: Bool = true
-    @State private var documentsPresented: Bool = true
     
     // Command Palette state
     @State private var showCommandPalette: Bool = false
@@ -78,25 +79,7 @@ struct MainView: View {
                 }
             }
         }
-        .overlay(alignment: .top) {
-            VStack(spacing: 8) {
-                if let error = vm.errorBanner {
-                    bannerView(message: error, color: .red, icon: "xmark.circle.fill") {
-                        vm.errorBanner = nil
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                if let success = vm.successBanner {
-                    bannerView(message: success, color: .green, icon: "checkmark.circle.fill") {
-                        vm.successBanner = nil
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .animation(.spring(response: 0.3), value: vm.errorBanner)
-            .animation(.spring(response: 0.3), value: vm.successBanner)
-            .padding(.top, 8)
-        }
+        .errorToast() // Unified error toast system
         .sheet(isPresented: $showCommandPalette) {
             CommandPaletteView(
                 vm: vm,
@@ -139,30 +122,6 @@ struct MainView: View {
         )
     }
     
-    private func bannerView(message: String, color: Color, icon: String, onDismiss: @escaping () -> Void) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundColor(.white)
-            Text(message)
-                .font(.callout.weight(.medium))
-                .foregroundColor(.white)
-                .lineLimit(2)
-            Spacer()
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .foregroundColor(.white.opacity(0.8))
-                    .font(.caption)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(color.opacity(0.9))
-        .cornerRadius(8)
-        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
-        .padding(.horizontal, 20)
-    }
-    
     // Sidebar: list of sections with icons
     var sidebarContent: some View {
         List(MainSidebarSection.allCases, selection: $selectedSection) { section in
@@ -178,6 +137,17 @@ struct MainView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.blue)
+                        .clipShape(Capsule())
+                }
+                
+                // Show pending reviews badge for intelligence
+                if section == .intelligence && vm.pendingIntelligenceReviews > 0 {
+                    Text("\(vm.pendingIntelligenceReviews)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange)
                         .clipShape(Capsule())
                 }
             }
@@ -244,8 +214,13 @@ struct MainView: View {
             }
             
         case .knowledge:
-            TopicBrowserView(vm: vm, isPresented: $documentsPresented)
-                .navigationTitle("Knowledge")
+            if let apiService = vm.apiService {
+                KnowledgeView(apiService: apiService)
+                    .navigationTitle("Knowledge")
+            } else {
+                Text("API Service not available")
+                    .navigationTitle("Knowledge")
+            }
             
         case .workTracker:
             WorkTrackerView(vm: vm)
@@ -261,8 +236,18 @@ struct MainView: View {
             }
             
         case .inbox:
-            InboxView(vm: vm, isPresented: $inboxPresented)
-                .navigationTitle("Inbox")
+            InboxView(
+                vm: vm,
+                isPresented: $inboxPresented,
+                onNavigateToTasks: {
+                    selectedSection = .tasks
+                }
+            )
+            .navigationTitle("Inbox")
+            
+        case .intelligence:
+            IntelligenceView(vm: vm)
+                .navigationTitle("Intelligence")
             
         case .status:
             if let apiService = vm.apiService {

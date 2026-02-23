@@ -174,9 +174,18 @@ swift run
 2. **Create feature branch:** `git checkout -b feature/your-feature`
 3. **Make changes** (follow patterns above)
 4. **Build & test:** `swift build && swift run`
-5. **Commit:** `git commit -m "feat: description"` (use conventional commits)
-6. **Push:** `git push origin feature/your-feature`
-7. **Don't create fix docs in root** — if you need to document, update this file
+5. **Lint check (optional):** `./scripts/lint-check` to manually check for violations
+6. **Commit:** `git commit -m "feat: description"` (pre-commit hook auto-runs)
+7. **Push:** `git push origin feature/your-feature`
+8. **Don't create fix docs in root** — if you need to document, update this file
+
+### Pre-commit Hook
+
+A git pre-commit hook (`.git/hooks/pre-commit`) automatically checks for forbidden CodingKeys patterns:
+- **Blocks commits** with snake_case CodingKeys (e.g., `case userId = "user_id"`)
+- **Why:** Decoder already uses `.convertFromSnakeCase` — manual keys cause double-conversion
+- **Manual check:** Run `./scripts/lint-check` anytime
+- **Override (not recommended):** `git commit --no-verify`
 
 ## Git Configuration
 

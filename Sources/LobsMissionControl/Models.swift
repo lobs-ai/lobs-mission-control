@@ -660,6 +660,7 @@ struct InitiativeReviewItem: Identifiable, Codable, Hashable {
   var decisionSummary: String?
   var learningFeedback: String?
   var approvedBy: String?
+  var estimatedEffort: String?
   var createdAt: Date?
   var updatedAt: Date?
 }
@@ -1384,3 +1385,6 @@ struct UsageDashboardResponse: Codable {
   var byModel: [UsageByModel]
   var dailySeries: [UsageDailySeries]
 }
+
+// MARK: - Intelligence Summary
+// Models moved to Intelligence/IntelligenceModels.swift to avoid duplication

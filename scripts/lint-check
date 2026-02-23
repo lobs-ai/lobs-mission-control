@@ -1,0 +1,65 @@
+#!/bin/bash
+# Manual lint check for CodingKeys violations
+# Run this to check for violations without committing
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$PROJECT_ROOT"
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+echo "🔍 Scanning for forbidden CodingKeys patterns..."
+
+VIOLATIONS_FOUND=0
+
+# Find all Swift source files
+SWIFT_FILES=$(find Sources -name "*.swift" 2>/dev/null || true)
+
+if [ -z "$SWIFT_FILES" ]; then
+  echo "No Swift files found"
+  exit 0
+fi
+
+for FILE in $SWIFT_FILES; do
+  if [ ! -f "$FILE" ]; then
+    continue
+  fi
+  
+  # Look for enum CodingKeys with snake_case string literals
+  if grep -n 'enum CodingKeys.*CodingKey' "$FILE" > /dev/null; then
+    SNAKE_CASE_LINES=$(grep -n 'case.*=.*".*_.*"' "$FILE" | grep -v '//' || true)
+    
+    if [ -n "$SNAKE_CASE_LINES" ]; then
+      if [ $VIOLATIONS_FOUND -eq 0 ]; then
+        echo ""
+        echo -e "${RED}❌ Found CodingKeys with snake_case conversions:${NC}"
+        echo ""
+      fi
+      
+      VIOLATIONS_FOUND=$((VIOLATIONS_FOUND + 1))
+      
+      echo -e "${YELLOW}File: $FILE${NC}"
+      echo "$SNAKE_CASE_LINES"
+      echo ""
+    fi
+  fi
+done
+
+if [ $VIOLATIONS_FOUND -gt 0 ]; then
+  echo -e "${RED}════════════════════════════════════════════════════════════${NC}"
+  echo -e "${RED}Found $VIOLATIONS_FOUND file(s) with violations${NC}"
+  echo ""
+  echo "These CodingKeys cause double-conversion bugs with .convertFromSnakeCase."
+  echo "Fix by removing the CodingKeys enum - decoder handles it automatically."
+  echo -e "${RED}════════════════════════════════════════════════════════════${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✅ No violations found - all clear!${NC}"
+exit 0

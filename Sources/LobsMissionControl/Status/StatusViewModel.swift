@@ -6,6 +6,7 @@ class StatusViewModel: ObservableObject {
   @Published var overview: SystemOverview?
   @Published var activity: [ActivityEvent] = []
   @Published var costs: CostSummary?
+  @Published var intelligence: IntelligenceSummary?
   
   @Published var isLoading = false
   @Published var error: String?
@@ -45,10 +46,12 @@ class StatusViewModel: ObservableObject {
     async let overviewTask = loadOverview(silent: silent)
     async let activityTask = loadActivity(silent: silent)
     async let costsTask = loadCosts(silent: silent)
+    async let intelligenceTask = loadIntelligence(silent: silent)
     
     await overviewTask
     await activityTask
     await costsTask
+    await intelligenceTask
     
     if !silent {
       isLoading = false
@@ -82,6 +85,16 @@ class StatusViewModel: ObservableObject {
     } catch {
       if !silent {
         // Cost tracking might not be enabled, so don't show error
+      }
+    }
+  }
+  
+  private func loadIntelligence(silent: Bool = false) async {
+    do {
+      intelligence = try await apiService.fetchIntelligenceSummary()
+    } catch {
+      if !silent {
+        // Intelligence tracking might not be available
       }
     }
   }

@@ -124,6 +124,11 @@ struct StatusView: View {
               }
             }
             
+            // Intelligence stats
+            if let intelligence = viewModel.intelligence {
+              IntelligenceSection(intelligence: intelligence)
+            }
+            
             // Activity & Costs row
             HStack(alignment: .top, spacing: 16) {
               // Activity feed
@@ -1173,6 +1178,162 @@ private struct SelfUpdateResultBanner: View {
         timer?.invalidate()
         onRelaunch()
       }
+    }
+  }
+}
+
+// MARK: - Intelligence Section
+
+private struct IntelligenceSection: View {
+  let intelligence: IntelligenceSummary
+  
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Intelligence")
+        .font(.title3.bold())
+        .padding(.horizontal, 4)
+      
+      LazyVGrid(columns: [
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+        GridItem(.flexible())
+      ], spacing: 12) {
+        // Pending Reviews
+        CardContainer(compact: true) {
+          VStack(alignment: .leading, spacing: 8) {
+            HStack {
+              Image(systemName: "tray.fill")
+                .font(.title3)
+                .foregroundStyle(intelligence.pendingReviews > 0 ? .orange : .secondary)
+              Text("Pending Reviews")
+                .font(.subheadline.bold())
+              Spacer()
+              if intelligence.pendingReviews > 0 {
+                Text("\(intelligence.pendingReviews)")
+                  .font(.title2.bold())
+                  .foregroundStyle(.orange)
+              }
+            }
+            
+            if intelligence.pendingReviews == 0 {
+              Text("All caught up")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
+        
+        // Approval Rate
+        if let approvalRate = intelligence.recentApprovalRate {
+          CardContainer(compact: true) {
+            VStack(alignment: .leading, spacing: 8) {
+              HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                  .font(.title3)
+                  .foregroundStyle(.green)
+                Text("Approval Rate")
+                  .font(.subheadline.bold())
+                Spacer()
+              }
+              
+              HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(approvalRate.percentage)%")
+                  .font(.title2.bold())
+                  .foregroundStyle(.green)
+                Text("(\(approvalRate.approved)/\(approvalRate.total))")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              
+              Text("Last \(approvalRate.days) days")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            }
+          }
+        }
+        
+        // Last Reflection
+        if let reflection = intelligence.lastReflection {
+          CardContainer(compact: true) {
+            VStack(alignment: .leading, spacing: 8) {
+              HStack {
+                Image(systemName: "brain.head.profile")
+                  .font(.title3)
+                  .foregroundStyle(.purple)
+                Text("Last Reflection")
+                  .font(.subheadline.bold())
+                Spacer()
+              }
+              
+              VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                  Text("\(reflection.agentCount)")
+                    .font(.caption.bold())
+                  Text(reflection.agentCount == 1 ? "agent" : "agents")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                
+                HStack {
+                  Text("\(reflection.initiativesProposed)")
+                    .font(.caption.bold())
+                  Text("initiatives")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                
+                Text(timeAgoString(reflection.timestamp))
+                  .font(.caption2)
+                  .foregroundStyle(.tertiary)
+              }
+            }
+          }
+        }
+        
+        // Last Sweep
+        if let sweep = intelligence.lastSweep {
+          CardContainer(compact: true) {
+            VStack(alignment: .leading, spacing: 8) {
+              HStack {
+                Image(systemName: "arrow.triangle.swap")
+                  .font(.title3)
+                  .foregroundStyle(.blue)
+                Text("Last Sweep")
+                  .font(.subheadline.bold())
+                Spacer()
+              }
+              
+              VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                  Text("\(sweep.decisionsMade)")
+                    .font(.caption.bold())
+                  Text("decisions")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                
+                Text(timeAgoString(sweep.timestamp))
+                  .font(.caption2)
+                  .foregroundStyle(.tertiary)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  private func timeAgoString(_ date: Date) -> String {
+    let elapsed = Date().timeIntervalSince(date)
+    if elapsed < 60 {
+      return "just now"
+    } else if elapsed < 3600 {
+      return "\(Int(elapsed/60))m ago"
+    } else if elapsed < 86400 {
+      return "\(Int(elapsed/3600))h ago"
+    } else {
+      return "\(Int(elapsed/86400))d ago"
     }
   }
 }

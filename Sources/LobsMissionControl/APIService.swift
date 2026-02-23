@@ -105,6 +105,9 @@ enum APIError: Error, LocalizedError {
   }
 }
 
+/// Empty response type for endpoints that return no data
+struct EmptyResponse: Codable {}
+
 /// API service that communicates with the lobs-server REST API.
 /// Provides the same interface as LobsControlStore but uses HTTP instead of file I/O.
 final class APIService {
@@ -870,6 +873,97 @@ final class APIService {
       .sorted { ($0.updatedAt ?? $0.createdAt ?? .distantPast) > ($1.updatedAt ?? $1.createdAt ?? .distantPast) }
   }
   
+  func loadInitiatives(status: String? = nil, limit: Int = 200) async throws -> [InitiativeReviewItem] {
+    struct InitiativesResponse: Decodable {
+      let items: [InitiativeReviewItem]
+    }
+    
+    var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+    if let status = status {
+      queryItems.append(URLQueryItem(name: "status", value: status))
+    }
+
+    let response: InitiativesResponse = try await request(
+      method: "GET",
+      path: "/api/orchestrator/intelligence/initiatives",
+      queryItems: queryItems
+    )
+
+    return response.items
+      .sorted { ($0.updatedAt ?? $0.createdAt ?? .distantPast) > ($1.updatedAt ?? $1.createdAt ?? .distantPast) }
+  }
+  
+  func decideInitiative(id: String, decision: String, notes: String? = nil) async throws -> InitiativeReviewItem {
+    struct DecisionRequest: Encodable {
+      let decision: String
+      let notes: String?
+    }
+    
+    return try await request(
+      method: "POST",
+      path: "/api/orchestrator/intelligence/initiatives/\(id)/decide",
+      body: DecisionRequest(decision: decision, notes: notes)
+    )
+  }
+  
+  func batchDecideInitiatives(ids: [String], decision: String, notes: String? = nil) async throws {
+    struct BatchDecisionRequest: Encodable {
+      let initiativeIds: [String]
+      let decision: String
+      let notes: String?
+    }
+    
+    let _: EmptyResponse = try await request(
+      method: "POST",
+      path: "/api/orchestrator/intelligence/initiatives/batch-decide",
+      body: BatchDecisionRequest(initiativeIds: ids, decision: decision, notes: notes)
+    )
+  }
+  
+  // MARK: - Intelligence & Reflections
+  
+  func fetchIntelligenceSummary() async throws -> IntelligenceSummary {
+    return try await request(
+      method: "GET",
+      path: "/api/orchestrator/intelligence/summary"
+    )
+  }
+  
+  func fetchReflections(limit: Int = 50) async throws -> [ReflectionCycle] {
+    struct ReflectionsResponse: Decodable {
+      let reflections: [ReflectionCycle]
+    }
+    
+    let response: ReflectionsResponse = try await request(
+      method: "GET",
+      path: "/api/orchestrator/intelligence/reflections",
+      queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+    )
+    
+    return response.reflections
+  }
+  
+  func fetchSweeps(limit: Int = 50) async throws -> [SweepCycle] {
+    struct SweepsResponse: Decodable {
+      let sweeps: [SweepCycle]
+    }
+    
+    let response: SweepsResponse = try await request(
+      method: "GET",
+      path: "/api/orchestrator/intelligence/sweeps",
+      queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+    )
+    
+    return response.sweeps
+  }
+  
+  func fetchSweepDetails(sweepId: String) async throws -> SweepDetails {
+    return try await request(
+      method: "GET",
+      path: "/api/orchestrator/intelligence/sweeps/\(sweepId)"
+    )
+  }
+  
   // MARK: - Agent Statuses
   
   func loadAgentStatuses() async throws -> [String: AgentStatus] {
@@ -1582,6 +1676,29 @@ final class APIService {
   
   // MARK: - Project README
   
+  func loadProjectReadme(projectId: String) async throws -> String {
+    struct ReadmeResponse: Codable {
+      let projectId: String
+      let content: String
+      
+      enum CodingKeys: String, CodingKey {
+        case projectId = "project_id"
+        case content
+      }
+    }
+    
+    do {
+      let response: ReadmeResponse = try await request(
+        method: "GET",
+        path: "/api/projects/\(projectId)/readme"
+      )
+      return response.content
+    } catch APIError.httpError(statusCode: 404, _) {
+      // No README exists yet
+      return ""
+    }
+  }
+  
   func saveProjectReadme(projectId: String, content: String) async throws {
     struct ReadmeUpdate: Codable {
       let content: String
@@ -1601,6 +1718,38 @@ final class APIService {
       method: "PUT",
       path: "/api/projects/\(projectId)/readme",
       body: ReadmeUpdate(content: content)
+    )
+  }
+  
+  // MARK: - TasksViewModel Compatibility Wrappers
+  
+  /// Convenience wrapper for TasksViewModel - fetches tasks as array
+  func fetchTasks() async throws -> [DashboardTask] {
+    let tasksFile = try await loadTasks()
+    return tasksFile.tasks
+  }
+  
+  /// Convenience wrapper for TasksViewModel - fetches projects as array
+  func fetchProjects() async throws -> [Project] {
+    let projectsFile = try await loadProjects()
+    return projectsFile.projects
+  }
+  
+  /// Convenience wrapper for TasksViewModel - creates task from DashboardTask object
+  func createTask(task: DashboardTask) async throws -> DashboardTask {
+    return try await addTask(
+      id: task.id,
+      title: task.title,
+      owner: task.owner ?? .lobs,
+      status: task.status,
+      projectId: task.projectId,
+      workState: task.workState,
+      reviewState: task.reviewState,
+      notes: task.notes,
+      agent: task.agent,
+      workspaceContext: task.workspaceContext,
+      userContext: task.userContext,
+      modelTier: task.modelTier
     )
   }
   

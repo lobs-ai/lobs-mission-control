@@ -1,3 +1,1 @@
-Added regression coverage for dashboard active-task filtering to ensure `not_started` and `in_progress` statuses are counted while `completed`, `cancelled`, and `archived` are excluded. Updated CommandCenter active counts to consistently use `status.isActiveWork` in all dashboard active-count paths.
-
-Test run status: `swift test --filter TaskStatusActiveWorkTests` and `swift test` are currently blocked by pre-existing duplicate test filename collisions in the repo (SwiftPM multiple producers for AIUsageTrackingTests.swift, AgentPickerTests.swift, TaskNotesResizeTests.swift).
+Knowledge tab fully implemented and integrated. Feed, Browse, Search views complete with KnowledgeService. Request Research button working. All tests passing. Old DocumentsView/ResearchView/TopicBrowserView files remain but are not used in MainView - can be removed in cleanup task.

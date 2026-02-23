@@ -1696,6 +1696,7 @@ private struct NewTaskSheet: View {
         
         // Close sheet on success
         await MainActor.run {
+          isCreating = false
           isPresented = false
         }
       } catch {
