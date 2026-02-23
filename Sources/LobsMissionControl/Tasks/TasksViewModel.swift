@@ -531,27 +531,21 @@ final class TasksViewModel: ObservableObject {
     
     func startTimer(taskId: String, autoPush: Bool = true) {
         optimisticUpdate(taskId: taskId) {
-            $0.timerState = .running
-            $0.timerStartedAt = Date()
+            $0.startedAt = Date()
+            $0.finishedAt = nil
         }
     }
     
     func stopTimer(taskId: String, autoPush: Bool = true) {
-        optimisticUpdate(taskId: taskId) { task in
-            if task.timerState == .running, let started = task.timerStartedAt {
-                let elapsed = Date().timeIntervalSince(started)
-                task.timerElapsed = (task.timerElapsed ?? 0) + elapsed
-            }
-            task.timerState = .stopped
-            task.timerStartedAt = nil
+        optimisticUpdate(taskId: taskId) {
+            $0.finishedAt = Date()
         }
     }
     
     func resetTimer(taskId: String, autoPush: Bool = true) {
         optimisticUpdate(taskId: taskId) {
-            $0.timerState = nil
-            $0.timerElapsed = nil
-            $0.timerStartedAt = nil
+            $0.startedAt = nil
+            $0.finishedAt = nil
         }
     }
     
@@ -748,13 +742,15 @@ final class TasksViewModel: ObservableObject {
     }
     
     func stampTemplate(_ template: TaskTemplate, autoPush: Bool = true) {
-        submitTaskToLobs(
-            title: template.title,
-            notes: template.notes,
-            agent: template.agent,
-            projectId: selectedProjectId,
-            autoPush: autoPush
-        )
+        for item in template.items {
+            submitTaskToLobs(
+                title: item.title,
+                notes: item.notes,
+                agent: nil,
+                projectId: selectedProjectId,
+                autoPush: autoPush
+            )
+        }
     }
     
     // MARK: - Private Helpers
