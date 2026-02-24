@@ -146,13 +146,13 @@ struct CommandPaletteView: View {
         case .projects: return recent.id.hasPrefix("project:") || recent.id.hasPrefix("research:")
         case .tasks: return recent.id.hasPrefix("task:")
         case .docs: return recent.id.hasPrefix("research:")
-        case .inbox: return recent.id.hasPrefix("inbox:")
         case .memories: return recent.id.hasPrefix("memory:")
         case .agents: return recent.id.hasPrefix("agent:")
         case .commands: return recent.id.hasPrefix("action:")
         case .topics: return recent.id.hasPrefix("topic:") || recent.id.hasPrefix("document:")
         case .calendar: return recent.id.hasPrefix("calendar:")
         case .workTracker: return recent.id.hasPrefix("tracker:")
+        case .inbox: return recent.id.hasPrefix("inbox:")
         }
       }
       // Deduplicate by result ID
@@ -532,23 +532,6 @@ struct CommandPaletteView: View {
     }
     
     return results
-  }
-  
-  private func inboxResults() -> [CommandResult] {
-    let inboxItems = vm.inboxItems
-    return inboxItems.prefix(20).map { item in
-      CommandResult(
-        id: "inbox:\(item.id)",
-        icon: "doc.text",
-        title: item.title,
-        subtitle: "Inbox item • \(item.filename)",
-        category: "Inbox",
-        action: {
-          // Open inbox view with this item selected
-          onOpenInbox?(item.id)
-        }
-      )
-    }
   }
   
   private func memoryResults() -> [CommandResult] {

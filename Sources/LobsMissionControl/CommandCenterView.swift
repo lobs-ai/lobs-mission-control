@@ -7,7 +7,6 @@ struct CommandCenterView: View {
   
   var onSelectProject: (String) -> Void
   var onNewTask: (() -> Void)? = nil
-  var onOpenInbox: ((String?) -> Void)? = nil
   var onOpenMemory: (() -> Void)? = nil
   var onOpenStatus: (() -> Void)? = nil
   var onOpenTeam: (() -> Void)? = nil
@@ -26,13 +25,6 @@ struct CommandCenterView: View {
   private var activeTasks: [DashboardTask] {
     vm.tasks.filter { $0.status.isActiveWork }
       .sorted { $0.updatedAt > $1.updatedAt }
-  }
-  
-  // Recent inbox items
-  private var recentInboxItems: [InboxItem] {
-    vm.inboxItems.sorted { $0.modifiedAt > $1.modifiedAt }
-      .prefix(3)
-      .map { $0 }
   }
   
   // System health from worker status
@@ -94,15 +86,12 @@ struct CommandCenterView: View {
   
   fileprivate enum ActivityEvent: Identifiable {
     case taskCompleted(DashboardTask)
-    case inboxItem(InboxItem)
     case workerRun(WorkerHistoryRun)
     
     var id: String {
       switch self {
       case .taskCompleted(let t):
         return "task-completed-\(t.id)-\(t.updatedAt.timeIntervalSince1970)"
-      case .inboxItem(let item):
-        return "inbox-\(item.id)-\(item.modifiedAt.timeIntervalSince1970)"
       case .workerRun(let run):
         return "worker-\(run.id)"
       }
@@ -112,8 +101,6 @@ struct CommandCenterView: View {
       switch self {
       case .taskCompleted(let t):
         return t.finishedAt ?? t.updatedAt
-      case .inboxItem(let item):
-        return item.modifiedAt
       case .workerRun(let run):
         return run.endedAt ?? run.startedAt ?? Date.distantPast
       }
@@ -130,11 +117,6 @@ struct CommandCenterView: View {
       if completionDate >= weekAgo {
         events.append(.taskCompleted(t))
       }
-    }
-    
-    // Action-required inbox items only (exclude system/state entries)
-    for item in vm.inboxItems where item.modifiedAt >= weekAgo && item.relativePath.hasPrefix("inbox/") {
-      events.append(.inboxItem(item))
     }
     
     // Worker runs - removed from recent activity display
@@ -244,8 +226,7 @@ struct CommandCenterView: View {
             events: activityFeed,
             vm: vm,
             onShowAll: { showAllActivitySheet = true },
-            onOpenTask: { task in selectedTask = task },
-            onOpenInbox: { itemId in onOpenInbox?(itemId) }
+            onOpenTask: { task in selectedTask = task }
           )
           .padding(.horizontal, 24)
           
@@ -319,9 +300,6 @@ struct CommandCenterView: View {
         events: activityFeed,
         onOpenTask: { task in
           selectedTask = task
-        },
-        onOpenInbox: { itemId in
-          onOpenInbox?(itemId)
         }
       )
       .frame(minWidth: 640, minHeight: 620)
@@ -526,7 +504,6 @@ private struct ActivityFeedSection: View {
   @ObservedObject var vm: AppViewModel
   let onShowAll: () -> Void
   let onOpenTask: (DashboardTask) -> Void
-  let onOpenInbox: (String?) -> Void
   
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -560,8 +537,7 @@ private struct ActivityFeedSection: View {
             ActivityEventRow(
               vm: vm,
               event: event,
-              onOpenTask: onOpenTask,
-              onOpenInbox: onOpenInbox
+              onOpenTask: onOpenTask
             )
             if idx < min(9, events.count - 1) {
               Divider().padding(.leading, 36)
@@ -583,7 +559,6 @@ private struct ActivityEventRow: View {
   @ObservedObject var vm: AppViewModel
   let event: CommandCenterView.ActivityEvent
   let onOpenTask: (DashboardTask) -> Void
-  let onOpenInbox: (String?) -> Void
   
   @State private var isHovering = false
   
@@ -592,8 +567,6 @@ private struct ActivityEventRow: View {
       switch event {
       case .taskCompleted(let t):
         onOpenTask(t)
-      case .inboxItem(let item):
-        onOpenInbox(item.id)
       case .workerRun:
         break
       }
@@ -643,8 +616,6 @@ private struct ActivityEventRow: View {
     switch event {
     case .taskCompleted(let t):
       return "Completed: \(t.title)"
-    case .inboxItem(let item):
-      return "Inbox: \(item.title)"
     case .workerRun:
       return "Worker ran"
     }
@@ -656,8 +627,6 @@ private struct ActivityEventRow: View {
       let projectId = t.projectId ?? "default"
       let projectName = vm.projects.first(where: { $0.id == projectId })?.title ?? projectId
       return "\(projectName) · \(t.owner?.rawValue ?? "unassigned")"
-    case .inboxItem(let item):
-      return item.summary
     case .workerRun(let run):
       let tasks = run.tasksCompleted ?? 0
       let dur = formatDuration(start: run.startedAt, end: run.endedAt)
@@ -671,9 +640,6 @@ private struct ActivityEventRow: View {
     case .taskCompleted:
       Image(systemName: "checkmark.circle.fill")
         .foregroundStyle(.green)
-    case .inboxItem:
-      Image(systemName: "tray.circle.fill")
-        .foregroundStyle(.blue)
     case .workerRun:
       Image(systemName: "gearshape.2.fill")
         .foregroundStyle(.purple)
@@ -1361,7 +1327,6 @@ private struct ActivitySheetView: View {
   @ObservedObject var vm: AppViewModel
   let events: [CommandCenterView.ActivityEvent]
   let onOpenTask: (DashboardTask) -> Void
-  let onOpenInbox: (String?) -> Void
   
   @Environment(\.dismiss) private var dismiss
   
@@ -1397,10 +1362,6 @@ private struct ActivitySheetView: View {
                 event: event,
                 onOpenTask: { t in
                   onOpenTask(t)
-                  dismiss()
-                },
-                onOpenInbox: { itemId in
-                  onOpenInbox(itemId)
                   dismiss()
                 }
               )

@@ -651,6 +651,7 @@ struct InitiativeReviewItem: Identifiable, Codable, Hashable {
   var selectedAgent: String?
   var selectedProjectId: String?
   var taskId: String?
+  var taskIds: [String]?  // Support multiple linked tasks
   var title: String
   var description: String?
   var category: String
@@ -663,6 +664,19 @@ struct InitiativeReviewItem: Identifiable, Codable, Hashable {
   var estimatedEffort: String?
   var createdAt: Date?
   var updatedAt: Date?
+  
+  /// Get all linked task IDs (from both taskId and taskIds)
+  var allTaskIds: [String] {
+    var ids: [String] = []
+    if let taskId = taskId {
+      ids.append(taskId)
+    }
+    if let taskIds = taskIds {
+      ids.append(contentsOf: taskIds)
+    }
+    // Remove duplicates while preserving order
+    return Array(NSOrderedSet(array: ids)) as! [String]
+  }
 }
 
 // MARK: - Agent Documents (Reports & Research)

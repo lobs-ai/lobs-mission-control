@@ -377,9 +377,8 @@ struct IntelligenceView: View {
             onDecision: { decision, notes in
               Task { await decideInitiative(id: item.id, decision: decision, notes: notes) }
             },
-            onOpenTask: {
-              if let taskId = item.taskId,
-                 let task = vm.tasks.first(where: { $0.id == taskId }) {
+            onOpenTask: { taskId in
+              if let task = vm.tasks.first(where: { $0.id == taskId }) {
                 vm.selectTask(task)
               }
             }
@@ -765,7 +764,7 @@ private struct InitiativeDetailView: View {
   let item: InitiativeReviewItem
   @ObservedObject var vm: AppViewModel
   let onDecision: (String, String?) -> Void
-  let onOpenTask: () -> Void
+  let onOpenTask: (String) -> Void
   
   @State private var decisionNotes: String = ""
   @State private var showApproveConfirm: Bool = false
@@ -879,19 +878,64 @@ private struct InitiativeDetailView: View {
           }
         }
         
-        if let taskId = item.taskId {
+        // Linked Tasks Section
+        let linkedTaskIds = item.allTaskIds
+        if !linkedTaskIds.isEmpty {
           Divider()
           
-          let taskExists = vm.tasks.contains(where: { $0.id == taskId })
-          Button {
-            onOpenTask()
-          } label: {
-            Label(taskExists ? "Open Linked Task" : "Linked Task Not Loaded", systemImage: "arrowshape.turn.up.right")
-              .frame(maxWidth: .infinity, alignment: .leading)
+          VStack(alignment: .leading, spacing: 12) {
+            Text(linkedTaskIds.count == 1 ? "Linked Task" : "Linked Tasks")
+              .font(.headline)
+            
+            ForEach(linkedTaskIds, id: \.self) { taskId in
+              let task = vm.tasks.first(where: { $0.id == taskId })
+              let taskExists = task != nil
+              
+              Button {
+                onOpenTask(taskId)
+              } label: {
+                HStack(spacing: 8) {
+                  Image(systemName: "arrowshape.turn.up.right")
+                  
+                  if let task = task {
+                    VStack(alignment: .leading, spacing: 2) {
+                      Text(task.title)
+                        .font(.body)
+                        .lineLimit(1)
+                      
+                      HStack(spacing: 6) {
+                        if let project = vm.projects.first(where: { $0.id == (task.projectId ?? "default") }) {
+                          Text(project.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                        
+                        Text("•")
+                          .font(.caption)
+                          .foregroundStyle(.tertiary)
+                        
+                        Text(task.status.capitalized)
+                          .font(.caption)
+                          .foregroundStyle(.secondary)
+                      }
+                    }
+                  } else {
+                    Text("Task Not Loaded")
+                      .font(.body)
+                      .foregroundStyle(.secondary)
+                      .italic()
+                  }
+                  
+                  Spacer()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
+              }
+              .buttonStyle(.bordered)
+              .disabled(!taskExists)
+              .help(taskId)
+            }
           }
-          .buttonStyle(.borderedProminent)
-          .disabled(!taskExists)
-          .help(taskId)
         }
         
         // Decision section (for pending items)
@@ -1308,6 +1352,49 @@ private struct ReflectionCard: View {
             }
             .padding(10)
             .background(Color.red.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+          }
+          
+          // Show "No findings" message if all arrays are empty
+          let hasFindings = !reflection.inefficiencies.isEmpty 
+                           || !reflection.missedOpportunities.isEmpty 
+                           || !reflection.systemRisks.isEmpty 
+                           || !reflection.identityAdjustments.isEmpty
+                           || !reflection.proposedInitiatives.isEmpty
+          
+          if !hasFindings && reflection.status == .completed {
+            VStack(alignment: .leading, spacing: 8) {
+              HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                  .foregroundStyle(.green)
+                Text("No Findings")
+                  .font(.subheadline)
+                  .fontWeight(.semibold)
+              }
+              
+              Text("This reflection cycle completed successfully but found no inefficiencies, missed opportunities, system risks, or identity adjustments to report.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(Color.green.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+          } else if !hasFindings && reflection.status == .running {
+            VStack(alignment: .leading, spacing: 8) {
+              HStack(spacing: 8) {
+                ProgressView()
+                  .scaleEffect(0.7)
+                Text("Reflection In Progress")
+                  .font(.subheadline)
+                  .fontWeight(.semibold)
+              }
+              
+              Text("This reflection cycle is currently running. Findings will appear here when the analysis is complete.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(Color.orange.opacity(0.05))
             .clipShape(RoundedRectangle(cornerRadius: 8))
           }
           
