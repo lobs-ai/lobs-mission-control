@@ -37,4 +37,31 @@ final class TaskStatusActiveWorkTests: XCTestCase {
     XCTAssertEqual(activeTasks.map(\.id), ["not-started", "in-progress", "active"])
     XCTAssertEqual(activeTasks.count, 3)
   }
+
+  func testIsBoardActiveMatchesActiveWorkContract() {
+    XCTAssertTrue(TaskStatus.active.isBoardActive)
+    XCTAssertTrue(TaskStatus.waitingOn.isBoardActive)
+    XCTAssertTrue(TaskStatus.other("not_started").isBoardActive)
+    XCTAssertTrue(TaskStatus.other("in_progress").isBoardActive)
+
+    XCTAssertFalse(TaskStatus.inbox.isBoardActive)
+    XCTAssertFalse(TaskStatus.completed.isBoardActive)
+    XCTAssertFalse(TaskStatus.rejected.isBoardActive)
+    XCTAssertFalse(TaskStatus.other("queued").isBoardActive)
+    XCTAssertFalse(TaskStatus.other("cancelled").isBoardActive)
+  }
+
+  func testBoardActiveCountExcludesNonActiveUnknownStates() {
+    let now = Date()
+    let tasks: [DashboardTask] = [
+      DashboardTask(id: "1", title: "active", status: .active, createdAt: now, updatedAt: now),
+      DashboardTask(id: "2", title: "waiting", status: .waitingOn, createdAt: now, updatedAt: now),
+      DashboardTask(id: "3", title: "unknown", status: .other("queued"), createdAt: now, updatedAt: now),
+      DashboardTask(id: "4", title: "inbox", status: .inbox, createdAt: now, updatedAt: now),
+      DashboardTask(id: "5", title: "done", status: .completed, createdAt: now, updatedAt: now),
+    ]
+
+    XCTAssertEqual(tasks.filter { $0.status.isBoardActive }.map(\.id), ["1", "2"])
+  }
 }
+

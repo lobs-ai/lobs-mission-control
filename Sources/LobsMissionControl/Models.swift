@@ -43,6 +43,14 @@ enum TaskStatus: Hashable, Codable {
     }
   }
 
+  /// Tasks that belong in the board's Active column.
+  ///
+  /// Keep this aligned with `isActiveWork` so board/detail counts stay
+  /// consistent with summary surfaces.
+  var isBoardActive: Bool {
+    isActiveWork
+  }
+
   var rawValue: String {
     switch self {
     case .inbox: return "inbox"
@@ -315,6 +323,12 @@ struct DashboardTask: Codable, Identifiable, Hashable {
 
   /// Model tier for agent execution (local/cheap/standard/strong, nil = auto).
   var modelTier: String?
+
+  /// Normalized project identifier used by board/counting surfaces.
+  ///
+  /// Historically, tasks without `projectId` belong to the default project.
+  /// Normalizing here keeps home/overview counts aligned with detailed boards.
+  var normalizedProjectId: String { projectId ?? "default" }
 
   /// Resolved owner (defaults to .lobs for backwards compatibility when server returns null).
   var resolvedOwner: TaskOwner { owner ?? .lobs }

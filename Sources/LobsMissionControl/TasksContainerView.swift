@@ -176,7 +176,7 @@ struct TasksContainerView: View {
     }
     
     private func taskCount(for projectId: String) -> Int {
-        vm.tasks.filter { $0.projectId == projectId && $0.status == .active }.count
+        vm.tasks.filter { $0.normalizedProjectId == projectId && $0.status.isBoardActive }.count
     }
     
     private func projectIcon(_ type: ProjectType) -> String {
@@ -217,8 +217,8 @@ struct TasksContainerView: View {
                 
                 // Task count badges (when viewing a project)
                 if !vm.selectedProjectId.isEmpty {
-                    let projectTasks = vm.tasks.filter { $0.projectId == vm.selectedProjectId }
-                    let activeCount = projectTasks.filter { $0.status == .active }.count
+                    let projectTasks = vm.tasks.filter { $0.normalizedProjectId == vm.selectedProjectId }
+                    let activeCount = projectTasks.filter { $0.status.isBoardActive }.count
                     let blockedCount = projectTasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count
                     
                     HStack(spacing: 8) {
@@ -251,7 +251,7 @@ struct TasksContainerView: View {
                 Spacer()
                 
                 // Overview stats
-                let activeTasks = vm.tasks.filter { $0.status != .completed && $0.status != .rejected }.count
+                let activeTasks = vm.tasks.filter { $0.status.isBoardActive }.count
                 let totalTasks = vm.tasks.count
                 let activeProjects = vm.sortedActiveProjects.count
                 
@@ -660,7 +660,7 @@ private struct RichProjectCard: View {
     
     @State private var isHovering = false
     
-    private var activeCount: Int { tasks.filter { $0.status == .active }.count }
+    private var activeCount: Int { tasks.filter { $0.status.isBoardActive }.count }
     private var completedCount: Int { tasks.filter { $0.status == .completed }.count }
     private var blockedCount: Int { tasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count }
     private var totalCount: Int { tasks.count }

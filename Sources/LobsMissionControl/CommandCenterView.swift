@@ -23,7 +23,7 @@ struct CommandCenterView: View {
   
   // Active tasks
   private var activeTasks: [DashboardTask] {
-    vm.tasks.filter { $0.status.isActiveWork }
+    vm.tasks.filter { $0.status.isBoardActive }
       .sorted { $0.updatedAt > $1.updatedAt }
   }
   
@@ -423,10 +423,10 @@ private struct DetailedStatsSection: View {
   
   private var projectStats: [(project: Project, active: Int, completed: Int, blocked: Int)] {
     vm.sortedActiveProjects.map { project in
-      let projectTasks = vm.tasks.filter { $0.projectId == project.id }
+      let projectTasks = vm.tasks.filter { $0.normalizedProjectId == project.id }
       return (
         project: project,
-        active: projectTasks.filter { $0.status.isActiveWork }.count,
+        active: projectTasks.filter { $0.status.isBoardActive }.count,
         completed: projectTasks.filter { $0.status == .completed }.count,
         blocked: projectTasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count
       )
@@ -696,7 +696,7 @@ private struct ProjectCardsSection: View {
           ForEach(projects) { project in
             ProjectCard(
               project: project,
-              tasks: tasks.filter { $0.projectId == project.id },
+              tasks: tasks.filter { $0.normalizedProjectId == project.id },
               onTap: { onSelectProject(project.id) }
             )
           }
@@ -713,7 +713,7 @@ private struct ProjectCard: View {
   
   @State private var isHovering = false
   
-  private var activeCount: Int { tasks.filter { $0.status.isActiveWork }.count }
+  private var activeCount: Int { tasks.filter { $0.status.isBoardActive }.count }
   private var completedCount: Int { tasks.filter { $0.status == .completed }.count }
   private var inboxCount: Int { tasks.filter { $0.status == .inbox }.count }
   private var blockedCount: Int { tasks.filter { $0.workState == .blocked && $0.status != .completed && $0.status != .rejected }.count }

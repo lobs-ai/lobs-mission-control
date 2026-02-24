@@ -3384,9 +3384,7 @@ final class AppViewModel: ObservableObject {
       // Match the column logic from `columns`
       switch status {
       case .active:
-        if t.status == .active || t.status == .waitingOn { return true }
-        if case .other = t.status { return true }
-        return false
+        return t.status.isBoardActive
       case .completed: return t.status == .completed
       case .rejected: return t.status == .rejected
       default: return t.status == status
@@ -3918,14 +3916,7 @@ final class AppViewModel: ObservableObject {
 
   var columns: [AnyTaskColumn] {
     let activeCol = AnyTaskColumn(title: "Active", dropStatus: .active) { t in
-      if t.status == .active || t.status == .waitingOn { return true }
-      // Unknown statuses default to Active column
-      switch t.status {
-      case .inbox, .active, .waitingOn, .completed, .rejected:
-        return false
-      case .other:
-        return true
-      }
+      t.status.isBoardActive
     }
 
     return [
