@@ -1,1 +1,1 @@
-Knowledge browse now groups entries by topic. Extracts topic from path (e.g., "research/ai-agents/doc.md" → "AI Agents") and displays entries under topic headers with entry counts. Includes helper functions for topic extraction and formatting. Build successful, tests created but XCTest env issue prevents execution.
+Fix task creation defaulting to Inbox project. Updated AddTaskSheet init to use vm.selectedProjectId as fallback instead of empty string when projectId is nil. Build passed successfully.

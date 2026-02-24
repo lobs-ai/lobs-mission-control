@@ -2415,8 +2415,8 @@ struct AddTaskSheet: View {
     self.vm = vm
     self._autoPush = autoPush
     self.projectId = projectId
-    // Initialize selectedProjectId based on projectId parameter
-    self._selectedProjectId = State(initialValue: projectId ?? "")
+    // Initialize selectedProjectId based on projectId parameter or fall back to vm.selectedProjectId
+    self._selectedProjectId = State(initialValue: projectId ?? vm.selectedProjectId)
   }
 
   private var activeProjects: [Project] {
