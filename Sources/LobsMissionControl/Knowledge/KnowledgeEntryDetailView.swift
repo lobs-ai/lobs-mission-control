@@ -61,7 +61,7 @@ struct KnowledgeEntryDetailView: View {
             Divider()
             
             // Content
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 20) {
                     // Title and metadata
                     VStack(alignment: .leading, spacing: 12) {
@@ -221,10 +221,12 @@ struct KnowledgeEntryDetailView: View {
                         .padding(.vertical, 40)
                     } else if let content = content {
                         SelfSizingMarkdownView(markdown: content, minHeight: 100)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .padding()
             }
+            .frame(maxHeight: .infinity)
         }
         .task {
             await loadContent()
