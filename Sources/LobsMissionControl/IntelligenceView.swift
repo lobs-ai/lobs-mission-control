@@ -799,6 +799,73 @@ private struct InitiativeDetailView: View {
     }
   }
   
+  @ViewBuilder
+  private var linkedTasksSection: some View {
+    let linkedTaskIds = item.allTaskIds
+    if !linkedTaskIds.isEmpty {
+      Divider()
+      
+      VStack(alignment: .leading, spacing: 12) {
+        Text(linkedTaskIds.count == 1 ? "Linked Task" : "Linked Tasks")
+          .font(.headline)
+        
+        ForEach(linkedTaskIds, id: \.self) { taskId in
+          linkedTaskButton(for: taskId)
+        }
+      }
+    }
+  }
+  
+  @ViewBuilder
+  private func linkedTaskButton(for taskId: String) -> some View {
+    let task = vm.tasks.first(where: { $0.id == taskId })
+    let taskExists = task != nil
+    
+    Button {
+      onOpenTask(taskId)
+    } label: {
+      HStack(spacing: 8) {
+        Image(systemName: "arrowshape.turn.up.right")
+        
+        if let task = task {
+          VStack(alignment: .leading, spacing: 2) {
+            Text(task.title)
+              .font(.body)
+              .lineLimit(1)
+            
+            HStack(spacing: 6) {
+              if let project = vm.projects.first(where: { $0.id == (task.projectId ?? "default") }) {
+                Text(project.name)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              
+              Text("•")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+              
+              Text(task.status.capitalized)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+          }
+        } else {
+          Text("Task Not Loaded")
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .italic()
+        }
+        
+        Spacer()
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.vertical, 8)
+    }
+    .buttonStyle(.bordered)
+    .disabled(!taskExists)
+    .help(taskId)
+  }
+  
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 16) {
@@ -879,64 +946,7 @@ private struct InitiativeDetailView: View {
         }
         
         // Linked Tasks Section
-        let linkedTaskIds = item.allTaskIds
-        if !linkedTaskIds.isEmpty {
-          Divider()
-          
-          VStack(alignment: .leading, spacing: 12) {
-            Text(linkedTaskIds.count == 1 ? "Linked Task" : "Linked Tasks")
-              .font(.headline)
-            
-            ForEach(linkedTaskIds, id: \.self) { taskId in
-              let task = vm.tasks.first(where: { $0.id == taskId })
-              let taskExists = task != nil
-              
-              Button {
-                onOpenTask(taskId)
-              } label: {
-                HStack(spacing: 8) {
-                  Image(systemName: "arrowshape.turn.up.right")
-                  
-                  if let task = task {
-                    VStack(alignment: .leading, spacing: 2) {
-                      Text(task.title)
-                        .font(.body)
-                        .lineLimit(1)
-                      
-                      HStack(spacing: 6) {
-                        if let project = vm.projects.first(where: { $0.id == (task.projectId ?? "default") }) {
-                          Text(project.name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-                        
-                        Text("•")
-                          .font(.caption)
-                          .foregroundStyle(.tertiary)
-                        
-                        Text(task.status.capitalized)
-                          .font(.caption)
-                          .foregroundStyle(.secondary)
-                      }
-                    }
-                  } else {
-                    Text("Task Not Loaded")
-                      .font(.body)
-                      .foregroundStyle(.secondary)
-                      .italic()
-                  }
-                  
-                  Spacer()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 8)
-              }
-              .buttonStyle(.bordered)
-              .disabled(!taskExists)
-              .help(taskId)
-            }
-          }
-        }
+        linkedTasksSection
         
         // Decision section (for pending items)
         if isPending {
