@@ -920,6 +920,31 @@ final class APIService {
     )
   }
   
+  func fetchInitiativeThread(id: String) async throws -> [InboxThreadMessage] {
+    struct ThreadResponse: Decodable {
+      let messages: [InboxThreadMessage]
+    }
+    
+    let response: ThreadResponse = try await request(
+      method: "GET",
+      path: "/api/orchestrator/intelligence/initiatives/\(id)/thread"
+    )
+    
+    return response.messages
+  }
+  
+  func sendInitiativeMessage(id: String, text: String) async throws -> InboxThreadMessage {
+    struct MessageCreate: Encodable {
+      let text: String
+    }
+    
+    return try await request(
+      method: "POST",
+      path: "/api/orchestrator/intelligence/initiatives/\(id)/thread",
+      body: MessageCreate(text: text)
+    )
+  }
+  
   // MARK: - Intelligence & Reflections
   
   func fetchIntelligenceSummary() async throws -> IntelligenceSummary {

@@ -36,6 +36,10 @@ struct IntelligenceView: View {
     case riskDesc = "High Risk First"
   }
   
+  private var pendingReviewCount: Int {
+    initiatives.filter { $0.status.lowercased() == "pending_review" }.count
+  }
+  
   private var filteredInitiatives: [InitiativeReviewItem] {
     var items = initiatives
     
@@ -124,13 +128,26 @@ struct IntelligenceView: View {
           Spacer()
           
           // Tab switcher
-          Picker("View", selection: $selectedTab) {
-            ForEach(IntelligenceTab.allCases, id: \.self) { tab in
-              Text(tab.rawValue).tag(tab)
+          HStack(spacing: 8) {
+            Picker("View", selection: $selectedTab) {
+              ForEach(IntelligenceTab.allCases, id: \.self) { tab in
+                Text(tab.rawValue).tag(tab)
+              }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 280)
+            
+            // Badge for pending reviews (initiatives tab only)
+            if selectedTab == .initiatives && pendingReviewCount > 0 {
+              Text("\(pendingReviewCount)")
+                .font(.system(size: 11, weight: .bold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.orange.opacity(0.15))
+                .foregroundStyle(.orange)
+                .clipShape(Capsule())
             }
           }
-          .pickerStyle(.segmented)
-          .frame(width: 280)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -205,6 +222,7 @@ struct IntelligenceView: View {
       Menu {
         Button("All Statuses") { statusFilter = "all" }
         Divider()
+        Button("Needs Review") { statusFilter = "pending_review" }
         Button("Pending Review") { statusFilter = "lobs_review" }
         Button("Approved") { statusFilter = "approved" }
         Button("Rejected") { statusFilter = "rejected" }
@@ -597,6 +615,7 @@ struct IntelligenceView: View {
   
   private func statusDisplayName(_ status: String) -> String {
     switch status.lowercased() {
+    case "pending_review": return "Needs Review"
     case "lobs_review": return "Pending Review"
     case "approved": return "Approved"
     case "rejected": return "Rejected"
@@ -751,6 +770,11 @@ private struct InitiativeDetailView: View {
   @State private var decisionNotes: String = ""
   @State private var showApproveConfirm: Bool = false
   @State private var showRejectConfirm: Bool = false
+  @State private var threadMessages: [InboxThreadMessage] = []
+  @State private var isLoadingThread: Bool = false
+  @State private var newMessageText: String = ""
+  @State private var isSendingMessage: Bool = false
+  @State private var showDiscussion: Bool = true
   
   private var isPending: Bool {
     item.status.lowercased() == "lobs_review" || item.status.lowercased() == "pending"
@@ -974,8 +998,154 @@ private struct InitiativeDetailView: View {
               .textSelection(.enabled)
           }
         }
+        
+        // Discussion/Thread Section
+        Divider()
+        
+        VStack(alignment: .leading, spacing: 12) {
+          Button {
+            showDiscussion.toggle()
+          } label: {
+            HStack {
+              Image(systemName: showDiscussion ? "chevron.down" : "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+              
+              Text("Discussion")
+                .font(.headline)
+              
+              if !threadMessages.isEmpty {
+                Text("(\(threadMessages.count))")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              
+              Spacer()
+            }
+          }
+          .buttonStyle(.plain)
+          
+          if showDiscussion {
+            VStack(alignment: .leading, spacing: 8) {
+              if isLoadingThread {
+                HStack {
+                  ProgressView()
+                    .scaleEffect(0.7)
+                  Text("Loading discussion...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+              } else if threadMessages.isEmpty {
+                Text("No messages yet. Start the conversation below.")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+                  .italic()
+                  .padding(.vertical, 8)
+              } else {
+                ScrollView {
+                  VStack(alignment: .leading, spacing: 12) {
+                    ForEach(threadMessages) { message in
+                      InitiativeThreadBubble(message: message)
+                    }
+                  }
+                  .padding(.vertical, 8)
+                }
+                .frame(maxHeight: 300)
+              }
+              
+              Divider()
+              
+              // Message input
+              VStack(alignment: .leading, spacing: 6) {
+                TextEditor(text: $newMessageText)
+                  .font(.body)
+                  .frame(minHeight: 60, maxHeight: 100)
+                  .padding(8)
+                  .background(Color.secondary.opacity(0.1))
+                  .clipShape(RoundedRectangle(cornerRadius: 8))
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                      .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                  )
+                
+                HStack {
+                  Text("Ask questions or provide feedback about this initiative")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                  
+                  Spacer()
+                  
+                  Button {
+                    sendMessage()
+                  } label: {
+                    HStack(spacing: 4) {
+                      if isSendingMessage {
+                        ProgressView()
+                          .scaleEffect(0.7)
+                      } else {
+                        Image(systemName: "paperplane.fill")
+                      }
+                      Text("Send")
+                    }
+                  }
+                  .buttonStyle(.borderedProminent)
+                  .disabled(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSendingMessage)
+                }
+              }
+            }
+          }
+        }
       }
       .padding(20)
+      .onAppear {
+        loadThread()
+      }
+    }
+  }
+  
+  private func loadThread() {
+    guard !isLoadingThread else { return }
+    isLoadingThread = true
+    
+    Task {
+      do {
+        let messages = try await vm.apiService?.fetchInitiativeThread(id: item.id) ?? []
+        await MainActor.run {
+          threadMessages = messages
+          isLoadingThread = false
+        }
+      } catch {
+        await MainActor.run {
+          isLoadingThread = false
+          // Silently fail - thread might not exist yet
+        }
+      }
+    }
+  }
+  
+  private func sendMessage() {
+    let text = newMessageText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty, !isSendingMessage else { return }
+    
+    isSendingMessage = true
+    
+    Task {
+      do {
+        let message = try await vm.apiService?.sendInitiativeMessage(id: item.id, text: text)
+        await MainActor.run {
+          if let message = message {
+            threadMessages.append(message)
+          }
+          newMessageText = ""
+          isSendingMessage = false
+        }
+      } catch {
+        await MainActor.run {
+          isSendingMessage = false
+          vm.flashError("Failed to send message: \(error.localizedDescription)")
+        }
+      }
     }
   }
 }
@@ -1340,5 +1510,54 @@ private struct ReflectionCard: View {
     } else {
       return "<1m"
     }
+  }
+}
+
+// MARK: - Initiative Thread Bubble
+
+private struct InitiativeThreadBubble: View {
+  let message: InboxThreadMessage
+  
+  private var isRafe: Bool {
+    message.author.lowercased() == "rafe"
+  }
+  
+  private var authorColor: Color {
+    isRafe ? .blue : .purple
+  }
+  
+  var body: some View {
+    HStack(alignment: .top, spacing: 8) {
+      // Author avatar
+      ZStack {
+        Circle()
+          .fill(authorColor.opacity(0.15))
+          .frame(width: 28, height: 28)
+        Text(isRafe ? "R" : String(message.author.prefix(1).uppercased()))
+          .font(.system(size: 13, weight: .bold))
+          .foregroundStyle(authorColor)
+      }
+      
+      VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 6) {
+          Text(message.author.capitalized)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(authorColor)
+          
+          Text(message.createdAt.formatted(date: .abbreviated, time: .shortened))
+            .font(.system(size: 11))
+            .foregroundStyle(.tertiary)
+        }
+        
+        Text(message.text)
+          .font(.body)
+          .textSelection(.enabled)
+      }
+      
+      Spacer()
+    }
+    .padding(10)
+    .background(Color.secondary.opacity(0.03))
+    .clipShape(RoundedRectangle(cornerRadius: 10))
   }
 }
