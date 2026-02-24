@@ -844,7 +844,7 @@ private struct InitiativeDetailView: View {
                 .font(.caption)
                 .foregroundStyle(.tertiary)
               
-              Text(task.status.capitalized)
+              Text(task.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
