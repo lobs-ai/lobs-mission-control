@@ -1,1 +1,1 @@
-Fix task creation defaulting to Inbox project. Updated AddTaskSheet init to use vm.selectedProjectId as fallback instead of empty string when projectId is nil. Build passed successfully.
+Integrated knowledge search into Browse section. Removed separate Search mode from KnowledgeView and added search bar with debouncing to KnowledgeBrowseView. Build passes successfully.

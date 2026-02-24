@@ -6,53 +6,54 @@ struct KnowledgeBrowseView: View {
     
     @State private var typeFilter: KnowledgeType? = nil
     @State private var expandedCollections: Set<String> = []
+    @State private var searchQuery = ""
+    @State private var searchTask: Task<Void, Never>? = nil
     
     var body: some View {
         VStack(spacing: 0) {
-            // Filters
+            // Search bar
             HStack(spacing: 12) {
-                // Breadcrumb
-                if let currentPath = service.currentPath {
-                    HStack(spacing: 4) {
-                        Button {
-                            Task {
-                                await service.browse(path: nil, type: typeFilter)
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "house.fill")
-                                    .font(.system(size: 11))
-                                Text("Root")
-                                    .font(.system(size: 12))
-                            }
+                // Search input
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    
+                    TextField("Search knowledge...", text: $searchQuery)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 14))
+                        .onSubmit {
+                            performSearch()
                         }
-                        .buttonStyle(.borderless)
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                        
-                        Text(currentPath)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.primary)
-                    }
-                } else {
-                    HStack(spacing: 4) {
-                        Image(systemName: "house.fill")
-                            .font(.system(size: 11))
-                        Text("All Knowledge")
-                            .font(.system(size: 12, weight: .semibold))
+                    
+                    if !searchQuery.isEmpty {
+                        Button {
+                            searchQuery = ""
+                            service.searchResults = []
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                
-                Spacer()
+                .padding(10)
+                .background(Color(NSColor.textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
                 
                 // Type filter
                 Menu {
                     Button("All Types") {
                         typeFilter = nil
-                        Task {
-                            await service.browse(path: service.currentPath, type: nil)
+                        if searchQuery.isEmpty {
+                            Task {
+                                await service.browse(path: service.currentPath, type: nil)
+                            }
+                        } else {
+                            performSearch()
                         }
                     }
                     
@@ -61,8 +62,12 @@ struct KnowledgeBrowseView: View {
                     ForEach(KnowledgeType.allCases, id: \.self) { type in
                         Button {
                             typeFilter = type
-                            Task {
-                                await service.browse(path: service.currentPath, type: type)
+                            if searchQuery.isEmpty {
+                                Task {
+                                    await service.browse(path: service.currentPath, type: type)
+                                }
+                            } else {
+                                performSearch()
                             }
                         } label: {
                             HStack {
@@ -85,12 +90,77 @@ struct KnowledgeBrowseView: View {
             }
             .padding()
             
+            // Breadcrumb and count (only show when not searching)
+            if searchQuery.isEmpty {
+                HStack(spacing: 12) {
+                    // Breadcrumb
+                    if let currentPath = service.currentPath {
+                        HStack(spacing: 4) {
+                            Button {
+                                Task {
+                                    await service.browse(path: nil, type: typeFilter)
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "house.fill")
+                                        .font(.system(size: 11))
+                                    Text("Root")
+                                        .font(.system(size: 12))
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                            
+                            Text(currentPath)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.primary)
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "house.fill")
+                                .font(.system(size: 11))
+                            Text("All Knowledge")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            } else {
+                HStack {
+                    Text("\(service.searchResults.count) results")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
+            
             Divider()
             
             // Content
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    if service.browseEntries.isEmpty {
+                    if !searchQuery.isEmpty {
+                        // Show search results
+                        if service.searchResults.isEmpty {
+                            noResultsState
+                        } else {
+                            ForEach(service.searchResults) { entry in
+                                KnowledgeEntryRow(
+                                    entry: entry,
+                                    onSelect: { onSelectEntry(entry) }
+                                )
+                                .padding(.horizontal)
+                            }
+                        }
+                    } else if service.browseEntries.isEmpty {
                         emptyState
                     } else {
                         // Group by collections first, then regular entries by topic
@@ -177,6 +247,22 @@ struct KnowledgeBrowseView: View {
                 .padding(.vertical)
             }
         }
+        .onChange(of: searchQuery) { oldValue, newValue in
+            // Debounce search
+            searchTask?.cancel()
+            
+            guard !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                service.searchResults = []
+                return
+            }
+            
+            searchTask = Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                if !Task.isCancelled {
+                    await service.search(query: newValue, type: typeFilter)
+                }
+            }
+        }
     }
     
     private var emptyState: some View {
@@ -196,6 +282,33 @@ struct KnowledgeBrowseView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 100)
+    }
+    
+    private var noResultsState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 64))
+                .foregroundStyle(.tertiary)
+            Text("No results found")
+                .font(.title3)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+            Text("Try different keywords or remove filters")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 100)
+    }
+    
+    private func performSearch() {
+        guard !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        
+        Task {
+            await service.search(query: searchQuery, type: typeFilter)
+        }
     }
     
     /// Extract topic from path (e.g., "research/ai-agents/doc.md" → "ai-agents")

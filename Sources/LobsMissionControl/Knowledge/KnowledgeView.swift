@@ -3,7 +3,6 @@ import SwiftUI
 enum KnowledgeViewMode: String, CaseIterable {
     case feed = "Feed"
     case browse = "Browse"
-    case search = "Search"
 }
 
 struct KnowledgeView: View {
@@ -138,13 +137,6 @@ struct KnowledgeView: View {
                     selectedEntry = entry
                 }
             )
-        case .search:
-            KnowledgeSearchView(
-                service: service,
-                onSelectEntry: { entry in
-                    selectedEntry = entry
-                }
-            )
         }
     }
     
@@ -171,9 +163,6 @@ struct KnowledgeView: View {
             await service.loadFeed()
         case .browse:
             await service.browse(path: service.currentPath)
-        case .search:
-            // Don't auto-refresh search - user needs to trigger it
-            break
         }
     }
 }
