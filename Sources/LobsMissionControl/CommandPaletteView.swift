@@ -9,7 +9,6 @@ struct CommandPaletteView: View {
   
   // Callbacks for triggering ContentView state changes
   var onNewTask: (() -> Void)? = nil
-  var onOpenInbox: ((String?) -> Void)? = nil
   var onOpenAIUsage: (() -> Void)? = nil
   var onOpenMemory: (() -> Void)? = nil
   var onOpenChat: (() -> Void)? = nil
@@ -39,7 +38,6 @@ struct CommandPaletteView: View {
     if searchText.hasPrefix("#") { return .projects }
     if searchText.hasPrefix("@") { return .tasks }
     if searchText.hasPrefix("/") { return .docs }
-    if searchText.hasPrefix("$") { return .inbox }
     if searchText.hasPrefix("!") { return .memories }
     if searchText.hasPrefix("&") { return .agents }
     if searchText.hasPrefix(">") { return .commands }
@@ -91,11 +89,6 @@ struct CommandPaletteView: View {
     // Research docs
     if filterMode == .all || filterMode == .docs {
       items.append(contentsOf: researchResults())
-    }
-    
-    // Inbox items
-    if filterMode == .all || filterMode == .inbox {
-      items.append(contentsOf: inboxResults())
     }
     
     // Memories (from async search)

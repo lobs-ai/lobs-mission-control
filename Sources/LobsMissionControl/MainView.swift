@@ -8,7 +8,6 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
     case knowledge = "Knowledge"
     case workTracker = "Work Tracker"
     case calendar = "Calendar"
-    case inbox = "Inbox"
     case intelligence = "Intelligence"
     case status = "Status"
     case usage = "Usage"
@@ -25,7 +24,6 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
         case .knowledge: return "books.vertical.fill"
         case .workTracker: return "clock.badge.checkmark.fill"
         case .calendar: return "calendar"
-        case .inbox: return "tray.fill"
         case .intelligence: return "brain.fill"
         case .status: return "chart.bar.fill"
         case .usage: return "chart.pie.fill"
@@ -43,7 +41,6 @@ struct MainView: View {
     @State private var memoryViewModel: MemoryViewModel?
     
     // Bindings for views that need isPresented
-    @State private var inboxPresented: Bool = true
     @State private var statusPresented: Bool = true
     
     // Command Palette state
@@ -87,9 +84,6 @@ struct MainView: View {
                 onNewTask: {
                     selectedSection = .tasks
                 },
-                onOpenInbox: { itemId in
-                    selectedSection = .inbox
-                },
                 onOpenMemory: {
                     selectedSection = .memory
                 },
@@ -129,17 +123,6 @@ struct MainView: View {
                 Label(section.rawValue, systemImage: section.icon)
                 Spacer()
                 
-                // Show unread badge for inbox
-                if section == .inbox && vm.unreadInboxCount > 0 {
-                    Text("\(vm.unreadInboxCount)")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.blue)
-                        .clipShape(Capsule())
-                }
-                
                 // Show pending reviews badge for intelligence
                 if section == .intelligence && vm.pendingIntelligenceReviews > 0 {
                     Text("\(vm.pendingIntelligenceReviews)")
@@ -171,9 +154,6 @@ struct MainView: View {
                 },
                 onNewTask: {
                     selectedSection = .tasks
-                },
-                onOpenInbox: { itemId in
-                    selectedSection = .inbox
                 },
                 onOpenMemory: {
                     selectedSection = .memory
@@ -234,16 +214,6 @@ struct MainView: View {
                 Text("API Service not available")
                     .navigationTitle("Calendar")
             }
-            
-        case .inbox:
-            InboxView(
-                vm: vm,
-                isPresented: $inboxPresented,
-                onNavigateToTasks: {
-                    selectedSection = .tasks
-                }
-            )
-            .navigationTitle("Inbox")
             
         case .intelligence:
             IntelligenceView(vm: vm)
