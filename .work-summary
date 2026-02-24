@@ -1,3 +1,1 @@
-Updated workflow graph nodes to better surface connections: taller nodes and multiline in/out connection previews with overflow counts so each node clearly shows linked nodes. Added tests for new connection preview text behavior and updated preview-limit expectation.
-
-Validation: `swift build` passes. `swift test` / `swift test --filter WorkflowGraphConnectionsDisplayTests` fail in this environment due existing `no such module 'XCTest'` errors (baseline issue starting at `AddTaskProjectPreselectionTests.swift`).
+Added background tap gesture to WorkflowGraphView canvas to dismiss node popup when clicking off a node. Build passes clean.

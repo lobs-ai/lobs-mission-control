@@ -120,6 +120,15 @@ struct WorkflowGraphView: View {
 
     private var canvas: some View {
         ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                        selectedNode = nil
+                    }
+                }
+
             ForEach(layout.lanes, id: \.stage) { lane in
                 StageLaneBackground(lane: lane)
             }
