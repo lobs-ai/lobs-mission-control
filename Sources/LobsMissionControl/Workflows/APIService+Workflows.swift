@@ -15,6 +15,18 @@ extension APIService {
         try await request(method: "GET", path: "/api/workflows/\(id)")
     }
 
+    func createWorkflow(_ requestBody: WorkflowCreateRequest) async throws -> WorkflowDefinition {
+        try await request(method: "POST", path: "/api/workflows", body: requestBody)
+    }
+
+    func updateWorkflow(id: String, updates: WorkflowUpdateRequest) async throws -> WorkflowDefinition {
+        try await request(method: "PUT", path: "/api/workflows/\(id)", body: updates)
+    }
+
+    func deleteWorkflow(id: String) async throws {
+        _ = try await request(method: "DELETE", path: "/api/workflows/\(id)") as APIResponse
+    }
+
     // MARK: - Workflow Runs
 
     func fetchWorkflowRuns(workflowId: String, limit: Int = 20, status: String? = nil) async throws -> [WorkflowRun] {
@@ -41,3 +53,5 @@ extension APIService {
         )
     }
 }
+
+private struct APIResponse: Codable {}

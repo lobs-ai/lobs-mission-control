@@ -135,7 +135,18 @@ struct WorkflowDetailView: View {
     // MARK: - Graph + Detail Split
 
     private var graphAndDetail: some View {
-        HSplitView {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle")
+                    .foregroundColor(.secondary)
+                Text("Click any node to open its details next to the node.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 6)
+
             WorkflowGraphView(
                 nodes: workflow.nodes,
                 edges: workflow.edges,
@@ -143,40 +154,7 @@ struct WorkflowDetailView: View {
                 runNodeStates: selectedRun?.nodeStates,
                 currentRunNode: selectedRun?.currentNode
             )
-            .frame(minWidth: 400)
-
-            nodeDetailPanel
-                .frame(minWidth: 260, idealWidth: 300)
         }
-    }
-
-    // MARK: - Node Detail Panel
-
-    private var nodeDetailPanel: some View {
-        VStack(spacing: 0) {
-            if let node = selectedNode {
-                ScrollView {
-                    NodeDetailCard(node: node, runState: selectedRun?.nodeStates?[node.id])
-                        .padding()
-                }
-            } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "cursorarrow.click.2")
-                        .font(.title)
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text("Click a node")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    Text("Select a node in the graph to see its configuration and failure policy.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding()
-            }
-        }
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     // MARK: - Runs

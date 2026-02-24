@@ -236,3 +236,36 @@ struct AnyCodable: Codable, Hashable {
         }
     }
 }
+
+
+// MARK: - Write Requests
+
+struct WorkflowCreateRequest: Codable {
+    let name: String
+    let description: String?
+    let nodes: [WorkflowNode]
+    let edges: [WorkflowEdge]
+    let trigger: WorkflowTrigger?
+    let metadata: WorkflowMetadata?
+    let isActive: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case name, description, nodes, edges, trigger, metadata
+        case isActive = "is_active"
+    }
+}
+
+struct WorkflowUpdateRequest: Codable {
+    var name: String?
+    var description: String?
+    var nodes: [WorkflowNode]?
+    var edges: [WorkflowEdge]?
+    var trigger: WorkflowTrigger?
+    var metadata: WorkflowMetadata?
+    var isActive: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case name, description, nodes, edges, trigger, metadata
+        case isActive = "is_active"
+    }
+}

@@ -7,7 +7,6 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
     case memory = "Memory"
     case knowledge = "Knowledge"
     case workTracker = "Work Tracker"
-    case calendar = "Calendar"
     case workflows = "Workflows"
     case intelligence = "Intelligence"
     case status = "Status"
@@ -24,7 +23,6 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
         case .memory: return "brain.head.profile"
         case .knowledge: return "books.vertical.fill"
         case .workTracker: return "clock.badge.checkmark.fill"
-        case .calendar: return "calendar"
         case .workflows: return "arrow.triangle.branch"
         case .intelligence: return "brain.fill"
         case .status: return "chart.bar.fill"
@@ -100,9 +98,6 @@ struct MainView: View {
                 },
                 onOpenKnowledge: {
                     selectedSection = .knowledge
-                },
-                onOpenCalendar: {
-                    selectedSection = .calendar
                 },
                 onOpenWorkTracker: {
                     selectedSection = .workTracker
@@ -207,15 +202,6 @@ struct MainView: View {
         case .workTracker:
             WorkTrackerView(vm: vm)
                 .navigationTitle("Work Tracker")
-            
-        case .calendar:
-            if let apiService = vm.apiService {
-                CalendarView(apiService: apiService)
-                    .navigationTitle("Calendar")
-            } else {
-                Text("API Service not available")
-                    .navigationTitle("Calendar")
-            }
             
         case .workflows:
             if let apiService = vm.apiService {

@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// Visual DAG rendering of workflow nodes.
-///
-/// Nodes are laid out top-to-bottom following the execution flow.
-/// Edges are drawn between connected nodes. Colors reflect node type
-/// and optionally run status.
 struct WorkflowGraphView: View {
     let nodes: [WorkflowNode]
     let edges: [WorkflowEdge]
@@ -12,339 +7,387 @@ struct WorkflowGraphView: View {
     let runNodeStates: [String: NodeState]?
     let currentRunNode: String?
 
-    // Layout constants
-    private let nodeWidth: CGFloat = 180
-    private let nodeHeight: CGFloat = 56
-    private let horizontalSpacing: CGFloat = 60
-    private let verticalSpacing: CGFloat = 40
+    @State private var zoom: CGFloat = 1.0
+    @State private var hideUnrelated: Bool = false
+
+    private let nodeWidth: CGFloat = 196
+    private let nodeHeight: CGFloat = 68
+    private let horizontalSpacing: CGFloat = 92
+    private let verticalSpacing: CGFloat = 34
 
     private var layout: DAGLayout {
-        DAGLayout(nodes: nodes, edges: allEdges, nodeWidth: nodeWidth, nodeHeight: nodeHeight,
-                  horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
+        DAGLayout(nodes: nodes, edges: allEdges, nodeWidth: nodeWidth, nodeHeight: nodeHeight, horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
     }
 
-    /// Build comprehensive edge list from both explicit edges and on_success/on_failure references
     private var allEdges: [ResolvedEdge] {
         var result: [ResolvedEdge] = []
         let nodeIds = Set(nodes.map(\.id))
 
-        // From explicit edges
-        for edge in edges {
-            if nodeIds.contains(edge.from) && nodeIds.contains(edge.to) {
-                result.append(ResolvedEdge(from: edge.from, to: edge.to, kind: .normal, label: edge.condition))
-            }
+        for edge in edges where nodeIds.contains(edge.from) && nodeIds.contains(edge.to) {
+            result.append(ResolvedEdge(from: edge.from, to: edge.to, kind: .normal, label: edge.condition))
         }
 
-        // From on_success / on_failure.fallback
         for node in nodes {
-            if let onSuccess = node.onSuccess, nodeIds.contains(onSuccess) {
-                // Avoid duplicate if already in explicit edges
-                if !result.contains(where: { $0.from == node.id && $0.to == onSuccess && $0.kind == .normal }) {
-                    result.append(ResolvedEdge(from: node.id, to: onSuccess, kind: .success, label: nil))
-                }
+            if let onSuccess = node.onSuccess,
+               nodeIds.contains(onSuccess),
+               !result.contains(where: { $0.from == node.id && $0.to == onSuccess }) {
+                result.append(ResolvedEdge(from: node.id, to: onSuccess, kind: .success, label: "success"))
             }
             if let fallback = node.onFailure?.fallback, nodeIds.contains(fallback) {
-                result.append(ResolvedEdge(from: node.id, to: fallback, kind: .failure, label: "fail"))
+                result.append(ResolvedEdge(from: node.id, to: fallback, kind: .failure, label: "failure"))
             }
         }
-
         return result
     }
 
-    var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            ZStack(alignment: .topLeading) {
-                // Draw edges first (behind nodes)
-                ForEach(layout.edgeLines, id: \.id) { line in
-                    EdgeLine(line: line)
-                }
+    private var selectedConnections: Set<String> {
+        guard let selected = selectedNode else { return [] }
+        var related: Set<String> = [selected.id]
+        for edge in allEdges where edge.from == selected.id || edge.to == selected.id {
+            related.insert(edge.from)
+            related.insert(edge.to)
+        }
+        return related
+    }
 
-                // Draw nodes
-                ForEach(nodes) { node in
-                    if let pos = layout.positions[node.id] {
+    var body: some View {
+        VStack(spacing: 8) {
+            controlBar
+
+            ScrollView([.horizontal, .vertical]) {
+                canvas
+                    .scaleEffect(zoom, anchor: .topLeading)
+                    .padding(24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .background(Color(nsColor: .textBackgroundColor))
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        zoom = min(2.2, max(0.55, value * zoom))
+                    }
+            )
+        }
+    }
+
+    private var controlBar: some View {
+        HStack(spacing: 8) {
+            Label("Zoom", systemImage: "plus.magnifyingglass")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Button { zoom = min(2.2, zoom + 0.1) } label: {
+                Image(systemName: "plus")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button { zoom = max(0.55, zoom - 0.1) } label: {
+                Image(systemName: "minus")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button("Fit") { zoom = 1.0 }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+            Divider().frame(height: 14)
+
+            Toggle(isOn: $hideUnrelated) {
+                Text("Collapse unrelated")
+                    .font(.caption)
+            }
+            .toggleStyle(.switch)
+            .disabled(selectedNode == nil)
+
+            Spacer()
+
+            Text("\(Int(zoom * 100))%")
+                .font(.caption.monospacedDigit())
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal)
+    }
+
+    private var canvas: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(layout.lanes, id: \.stage) { lane in
+                StageLaneBackground(lane: lane)
+            }
+
+            ForEach(layout.edgeLines, id: \.id) { line in
+                let isConnected = selectedNode != nil && line.connects(nodeId: selectedNode!.id)
+                let shouldDim = selectedNode != nil && !isConnected
+                let shouldHide = hideUnrelated && selectedNode != nil && !isConnected
+                if !shouldHide {
+                    EdgeLine(line: line, isHighlighted: selectedNode == nil || isConnected, isDimmed: shouldDim)
+                }
+            }
+
+            ForEach(layout.stageHeaders, id: \.stage) { header in
+                StageHeaderView(header: header)
+                    .position(x: header.centerX, y: 18)
+            }
+
+            ForEach(nodes) { node in
+                if let pos = layout.positions[node.id] {
+                    let unrelated = selectedNode != nil && !selectedConnections.contains(node.id)
+                    if !(hideUnrelated && unrelated) {
                         NodeChip(
                             node: node,
                             isSelected: selectedNode?.id == node.id,
                             isCurrentRunNode: currentRunNode == node.id,
-                            runState: runNodeStates?[node.id]
+                            runState: runNodeStates?[node.id],
+                            isDimmed: unrelated
                         )
                         .frame(width: nodeWidth, height: nodeHeight)
                         .position(x: pos.x + nodeWidth / 2, y: pos.y + nodeHeight / 2)
                         .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.15)) {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
                                 selectedNode = (selectedNode?.id == node.id) ? nil : node
                             }
                         }
                     }
                 }
             }
-            .frame(
-                width: layout.canvasSize.width + 40,
-                height: layout.canvasSize.height + 40
-            )
-            .padding(20)
+
+            if let node = selectedNode, let pos = layout.positions[node.id] {
+                NodeDetailCard(node: node, runState: runNodeStates?[node.id])
+                    .padding(12)
+                    .frame(width: 360)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                    .position(detailPosition(for: pos))
+            }
+
+            LegendView()
+                .position(x: layout.canvasSize.width - 120, y: 30)
         }
-        .background(Color(nsColor: .textBackgroundColor))
+        .frame(width: layout.canvasSize.width + 80, height: layout.canvasSize.height + 70)
+    }
+
+    private func detailPosition(for nodePos: CGPoint) -> CGPoint {
+        let rightCandidate = nodePos.x + nodeWidth + 220
+        let x: CGFloat = rightCandidate < layout.canvasSize.width ? rightCandidate : max(220, nodePos.x - 200)
+        let y: CGFloat = max(130, min(layout.canvasSize.height - 120, nodePos.y + nodeHeight / 2))
+        return CGPoint(x: x, y: y)
     }
 }
-
-// MARK: - Resolved Edge
 
 struct ResolvedEdge: Identifiable, Hashable {
     let from: String
     let to: String
     let kind: Kind
     let label: String?
-
     var id: String { "\(from)->\(to):\(kind.rawValue)" }
-
-    enum Kind: String {
-        case normal
-        case success
-        case failure
-    }
+    enum Kind: String { case normal, success, failure }
 }
-
-// MARK: - DAG Layout Engine
 
 struct DAGLayout {
     let positions: [String: CGPoint]
     let canvasSize: CGSize
     let edgeLines: [EdgeLineData]
+    let stageHeaders: [StageHeader]
+    let lanes: [StageLane]
 
     init(nodes: [WorkflowNode], edges: [ResolvedEdge], nodeWidth: CGFloat, nodeHeight: CGFloat,
          horizontalSpacing: CGFloat, verticalSpacing: CGFloat) {
-
-        // Build adjacency + compute layers via topological sort
         let nodeIds = nodes.map(\.id)
         let nodeSet = Set(nodeIds)
         var incoming: [String: Set<String>] = [:]
         var outgoing: [String: [String]] = [:]
 
-        for id in nodeIds {
-            incoming[id] = []
-            outgoing[id] = []
-        }
-
+        for id in nodeIds { incoming[id] = []; outgoing[id] = [] }
         for edge in edges where nodeSet.contains(edge.from) && nodeSet.contains(edge.to) {
             incoming[edge.to, default: []].insert(edge.from)
             outgoing[edge.from, default: []].append(edge.to)
         }
 
-        // Assign layers (longest path from root)
-        var layers: [String: Int] = [:]
-        var visited: Set<String> = []
-
-        func assignLayer(_ nodeId: String, layer: Int) {
-            if let existing = layers[nodeId], existing >= layer {
-                return
-            }
-            layers[nodeId] = layer
-            visited.insert(nodeId)
-            for next in (outgoing[nodeId] ?? []) {
-                assignLayer(next, layer: layer + 1)
-            }
+        var stages: [String: Int] = [:]
+        func assign(_ nodeId: String, _ stage: Int) {
+            if let existing = stages[nodeId], existing >= stage { return }
+            stages[nodeId] = stage
+            for next in (outgoing[nodeId] ?? []) { assign(next, stage + 1) }
         }
-
-        // Start from nodes with no incoming edges
         let roots = nodeIds.filter { (incoming[$0] ?? []).isEmpty }
-        if roots.isEmpty && !nodeIds.isEmpty {
-            // Fallback: use first node
-            assignLayer(nodeIds[0], layer: 0)
-        } else {
-            for root in roots {
-                assignLayer(root, layer: 0)
-            }
-        }
+        if roots.isEmpty, let first = nodeIds.first { assign(first, 0) }
+        for root in roots { assign(root, 0) }
+        for id in nodeIds where stages[id] == nil { stages[id] = (stages.values.max() ?? 0) + 1 }
 
-        // Assign remaining unvisited nodes
-        for id in nodeIds where layers[id] == nil {
-            layers[id] = (layers.values.max() ?? 0) + 1
-        }
+        var stageGroups: [Int: [String]] = [:]
+        for (id, stage) in stages { stageGroups[stage, default: []].append(id) }
 
-        // Group by layer
-        var layerGroups: [Int: [String]] = [:]
-        for (id, layer) in layers {
-            layerGroups[layer, default: []].append(id)
-        }
+        let maxStage = stageGroups.keys.max() ?? 0
+        let maxRows = stageGroups.values.map(\.count).max() ?? 1
+        let width = CGFloat(maxStage + 1) * (nodeWidth + horizontalSpacing)
+        let height = CGFloat(maxRows) * (nodeHeight + verticalSpacing) + 60
 
-        // Compute positions
         var pos: [String: CGPoint] = [:]
-        let maxNodesInLayer = layerGroups.values.map(\.count).max() ?? 1
-        let canvasWidth = CGFloat(maxNodesInLayer) * (nodeWidth + horizontalSpacing)
+        var headers: [StageHeader] = []
+        var stageLanes: [StageLane] = []
 
-        for (layer, ids) in layerGroups {
-            let sortedIds = ids.sorted()
-            let layerWidth = CGFloat(sortedIds.count) * (nodeWidth + horizontalSpacing) - horizontalSpacing
-            let xOffset = (canvasWidth - layerWidth) / 2
+        for stage in 0...maxStage {
+            let ids = (stageGroups[stage] ?? []).sorted()
+            let stageHeight = CGFloat(ids.count) * (nodeHeight + verticalSpacing) - verticalSpacing
+            let yOffset = max(46, (height - stageHeight) / 2)
+            let x = CGFloat(stage) * (nodeWidth + horizontalSpacing)
 
-            for (i, id) in sortedIds.enumerated() {
-                let x = xOffset + CGFloat(i) * (nodeWidth + horizontalSpacing)
-                let y = CGFloat(layer) * (nodeHeight + verticalSpacing)
+            for (i, id) in ids.enumerated() {
+                let y = yOffset + CGFloat(i) * (nodeHeight + verticalSpacing)
                 pos[id] = CGPoint(x: x, y: y)
             }
+
+            headers.append(StageHeader(stage: stage, count: ids.count, centerX: x + nodeWidth / 2))
+            stageLanes.append(StageLane(stage: stage, rect: CGRect(x: x - 14, y: 30, width: nodeWidth + 28, height: height - 12)))
         }
 
         self.positions = pos
-        let maxLayer = layerGroups.keys.max() ?? 0
-        self.canvasSize = CGSize(
-            width: canvasWidth,
-            height: CGFloat(maxLayer + 1) * (nodeHeight + verticalSpacing)
-        )
+        self.canvasSize = CGSize(width: width, height: height)
+        self.stageHeaders = headers
+        self.lanes = stageLanes
 
-        // Build edge lines
         var lines: [EdgeLineData] = []
         for edge in edges {
             guard let fromPos = pos[edge.from], let toPos = pos[edge.to] else { continue }
-            let startPoint = CGPoint(x: fromPos.x + nodeWidth / 2, y: fromPos.y + nodeHeight)
-            let endPoint = CGPoint(x: toPos.x + nodeWidth / 2, y: toPos.y)
-            lines.append(EdgeLineData(
-                id: edge.id,
-                start: startPoint,
-                end: endPoint,
-                kind: edge.kind,
-                label: edge.label
-            ))
+            lines.append(EdgeLineData(id: edge.id, from: edge.from, to: edge.to, start: CGPoint(x: fromPos.x + nodeWidth, y: fromPos.y + nodeHeight / 2), end: CGPoint(x: toPos.x, y: toPos.y + nodeHeight / 2), kind: edge.kind, label: edge.label))
         }
         self.edgeLines = lines
     }
 }
 
+struct StageHeader { let stage: Int; let count: Int; let centerX: CGFloat }
+struct StageLane { let stage: Int; let rect: CGRect }
+
 struct EdgeLineData: Identifiable {
     let id: String
+    let from: String
+    let to: String
     let start: CGPoint
     let end: CGPoint
     let kind: ResolvedEdge.Kind
     let label: String?
+    func connects(nodeId: String) -> Bool { from == nodeId || to == nodeId }
 }
 
-// MARK: - Edge Line View
+private struct StageLaneBackground: View {
+    let lane: StageLane
+    var body: some View {
+        RoundedRectangle(cornerRadius: 14)
+            .fill(Color.secondary.opacity(0.06))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.secondary.opacity(0.08), lineWidth: 1))
+            .frame(width: lane.rect.width, height: lane.rect.height)
+            .position(x: lane.rect.midX, y: lane.rect.midY)
+    }
+}
+
+private struct StageHeaderView: View {
+    let header: StageHeader
+    var body: some View {
+        Text("Stage \(header.stage + 1) · \(header.count) node\(header.count == 1 ? "" : "s")")
+            .font(.caption2.weight(.semibold))
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.secondary.opacity(0.08))
+            .clipShape(Capsule())
+    }
+}
 
 struct EdgeLine: View {
     let line: EdgeLineData
+    let isHighlighted: Bool
+    let isDimmed: Bool
 
     var body: some View {
         ZStack {
             Path { path in
                 path.move(to: line.start)
-                // Bezier curve for smooth edges
-                let midY = (line.start.y + line.end.y) / 2
-                path.addCurve(
-                    to: line.end,
-                    control1: CGPoint(x: line.start.x, y: midY),
-                    control2: CGPoint(x: line.end.x, y: midY)
-                )
+                let elbowX = (line.start.x + line.end.x) / 2
+                path.addLine(to: CGPoint(x: elbowX, y: line.start.y))
+                path.addLine(to: CGPoint(x: elbowX, y: line.end.y))
+                path.addLine(to: line.end)
             }
-            .stroke(edgeColor, style: StrokeStyle(lineWidth: 2, dash: line.kind == .failure ? [5, 3] : []))
+            .stroke(edgeColor, style: StrokeStyle(lineWidth: isHighlighted ? 2.4 : 1.6, dash: line.kind == .failure ? [6, 4] : []))
+            .opacity(isDimmed ? 0.22 : 1)
 
-            // Arrow head
-            arrowHead
-
-            // Label
             if let label = line.label {
                 Text(label)
                     .font(.system(size: 9).weight(.medium))
                     .foregroundColor(edgeColor)
                     .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Color(nsColor: .textBackgroundColor).opacity(0.9))
-                    .position(x: (line.start.x + line.end.x) / 2, y: (line.start.y + line.end.y) / 2)
+                    .padding(.vertical, 2)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.95))
+                    .clipShape(Capsule())
+                    .position(x: (line.start.x + line.end.x) / 2, y: min(line.start.y, line.end.y) - 8)
+                    .opacity(isDimmed ? 0.25 : 1)
             }
         }
     }
 
     private var edgeColor: Color {
         switch line.kind {
-        case .success: return .green.opacity(0.6)
-        case .failure: return .red.opacity(0.6)
-        case .normal: return .secondary.opacity(0.5)
+        case .success: return .green.opacity(0.75)
+        case .failure: return .red.opacity(0.75)
+        case .normal: return .secondary.opacity(0.62)
         }
-    }
-
-    private var arrowHead: some View {
-        let angle = atan2(line.end.y - line.start.y, line.end.x - line.start.x)
-        let arrowSize: CGFloat = 8
-        return Path { path in
-            let tip = line.end
-            let left = CGPoint(
-                x: tip.x - arrowSize * cos(angle - .pi / 6),
-                y: tip.y - arrowSize * sin(angle - .pi / 6)
-            )
-            let right = CGPoint(
-                x: tip.x - arrowSize * cos(angle + .pi / 6),
-                y: tip.y - arrowSize * sin(angle + .pi / 6)
-            )
-            path.move(to: tip)
-            path.addLine(to: left)
-            path.addLine(to: right)
-            path.closeSubpath()
-        }
-        .fill(edgeColor)
     }
 }
 
-// MARK: - Node Chip
+private struct LegendView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            row("Normal", .secondary)
+            row("Success", .green)
+            row("Failure", .red)
+        }
+        .padding(8)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.18), lineWidth: 1))
+    }
+
+    private func row(_ title: String, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(title).font(.system(size: 10)).foregroundColor(.secondary)
+        }
+    }
+}
 
 struct NodeChip: View {
     let node: WorkflowNode
     let isSelected: Bool
     let isCurrentRunNode: Bool
     let runState: NodeState?
+    let isDimmed: Bool
 
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 4) {
-                Image(systemName: nodeIcon)
-                    .font(.caption)
-                    .foregroundColor(nodeColor)
-                Text(node.id)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
+        VStack(spacing: 5) {
+            HStack(spacing: 5) {
+                Image(systemName: nodeIcon).font(.caption).foregroundColor(nodeColor)
+                Text(node.id).font(.caption.weight(.semibold)).lineLimit(1)
             }
-
-            Text(node.type)
-                .font(.system(size: 9))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-
-            // Run status indicator
+            Text(node.type).font(.system(size: 9)).foregroundColor(.secondary).lineLimit(1)
             if let state = runState {
-                HStack(spacing: 3) {
-                    Circle()
-                        .fill(statusColor(state.status ?? "unknown"))
-                        .frame(width: 6, height: 6)
-                    Text(state.status ?? "—")
-                        .font(.system(size: 8))
-                        .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    Circle().fill(statusColor(state.status ?? "unknown")).frame(width: 6, height: 6)
+                    Text(state.status ?? "—").font(.system(size: 8)).foregroundColor(.secondary)
+                    if let attempts = state.attempts, attempts > 1 {
+                        Text("×\(attempts)").font(.system(size: 8, weight: .semibold)).foregroundColor(.orange)
+                    }
                 }
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(backgroundColor)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(borderColor, lineWidth: isSelected ? 2.5 : 1)
-        )
-        .shadow(color: isCurrentRunNode ? .blue.opacity(0.5) : .clear, radius: 6)
-        .contentShape(Rectangle())
-    }
-
-    private var backgroundColor: Color {
-        if isSelected {
-            return nodeColor.opacity(0.12)
-        }
-        return Color(nsColor: .controlBackgroundColor)
-    }
-
-    private var borderColor: Color {
-        if isSelected { return nodeColor }
-        if isCurrentRunNode { return .blue }
-        return .secondary.opacity(0.3)
+        .background(RoundedRectangle(cornerRadius: 10).fill(isSelected ? nodeColor.opacity(0.14) : Color(nsColor: .controlBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? nodeColor : (isCurrentRunNode ? .blue : .secondary.opacity(0.3)), lineWidth: isSelected ? 2.5 : 1))
+        .shadow(color: isCurrentRunNode ? .blue.opacity(0.35) : .clear, radius: 5)
+        .opacity(isDimmed ? 0.35 : 1)
     }
 
     private var nodeIcon: String {

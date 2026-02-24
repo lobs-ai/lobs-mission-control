@@ -17,7 +17,6 @@ struct CommandPaletteView: View {
   var onOpenSettings: (() -> Void)? = nil
   var onOpenAgentDetail: ((String) -> Void)? = nil
   var onOpenKnowledge: (() -> Void)? = nil
-  var onOpenCalendar: (() -> Void)? = nil
   var onOpenWorkTracker: (() -> Void)? = nil
   
   // Loaded memories from MemoryView (for local search)
@@ -42,7 +41,6 @@ struct CommandPaletteView: View {
     if searchText.hasPrefix("&") { return .agents }
     if searchText.hasPrefix(">") { return .commands }
     if searchText.hasPrefix("%") { return .topics }
-    if searchText.hasPrefix("^") { return .calendar }
     if searchText.hasPrefix("*") { return .workTracker }
     return .all
   }
@@ -107,11 +105,6 @@ struct CommandPaletteView: View {
       items.append(contentsOf: documentResults())
     }
     
-    // Calendar events
-    if filterMode == .all || filterMode == .calendar {
-      items.append(contentsOf: calendarResults())
-    }
-    
     // Work Tracker entries
     if filterMode == .all || filterMode == .workTracker {
       items.append(contentsOf: workTrackerResults())
@@ -150,7 +143,6 @@ struct CommandPaletteView: View {
         case .agents: return recent.id.hasPrefix("agent:")
         case .commands: return recent.id.hasPrefix("action:")
         case .topics: return recent.id.hasPrefix("topic:") || recent.id.hasPrefix("document:")
-        case .calendar: return recent.id.hasPrefix("calendar:")
         case .workTracker: return recent.id.hasPrefix("tracker:")
         case .inbox: return recent.id.hasPrefix("inbox:")
         }
@@ -246,7 +238,6 @@ struct CommandPaletteView: View {
                 }
                 HStack(spacing: 12) {
                   FilterHint(prefix: "%", label: "Topics")
-                  FilterHint(prefix: "^", label: "Calendar")
                 }
                 HStack(spacing: 12) {
                   FilterHint(prefix: "*", label: "Tracker")
@@ -655,13 +646,6 @@ struct CommandPaletteView: View {
     }
   }
   
-  private func calendarResults() -> [CommandResult] {
-    // TODO: Calendar events are managed by CalendarViewModel, not AppViewModel
-    // Would require integrating calendar data into AppViewModel or passing CalendarViewModel
-    // For now, returning empty array - calendar nav is via quick actions
-    return []
-  }
-  
   private func workTrackerResults() -> [CommandResult] {
     let recentEntries = vm.trackerEntries.sorted { $0.createdAt > $1.createdAt }.prefix(15)
     
@@ -750,16 +734,6 @@ struct CommandPaletteView: View {
         category: "Actions",
         action: {
           onOpenKnowledge?()
-        }
-      ),
-      CommandResult(
-        id: "action:calendar",
-        icon: "calendar",
-        title: "Calendar",
-        subtitle: "View calendar and events",
-        category: "Actions",
-        action: {
-          onOpenCalendar?()
         }
       ),
       CommandResult(
@@ -957,7 +931,6 @@ private enum FilterMode {
   case agents
   case commands
   case topics
-  case calendar
   case workTracker
 }
 
