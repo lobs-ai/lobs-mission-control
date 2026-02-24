@@ -93,7 +93,7 @@ struct KnowledgeBrowseView: View {
                     if service.browseEntries.isEmpty {
                         emptyState
                     } else {
-                        // Group by collections first, then regular entries
+                        // Group by collections first, then regular entries by topic
                         let collections = service.browseEntries.filter { $0.isCollection }
                         let regularEntries = service.browseEntries.filter { !$0.isCollection }
                         
@@ -133,27 +133,42 @@ struct KnowledgeBrowseView: View {
                         }
                         
                         if !regularEntries.isEmpty {
-                            Section {
-                                ForEach(regularEntries) { entry in
-                                    KnowledgeEntryRow(
-                                        entry: entry,
-                                        onSelect: { onSelectEntry(entry) }
-                                    )
-                                    .padding(.horizontal)
-                                }
-                            } header: {
-                                if !collections.isEmpty {
+                            // Group regular entries by topic
+                            let groupedByTopic = Dictionary(grouping: regularEntries) { entry in
+                                extractTopic(from: entry.path)
+                            }
+                            let sortedTopics = groupedByTopic.keys.sorted()
+                            
+                            ForEach(sortedTopics, id: \.self) { topic in
+                                Section {
+                                    ForEach(groupedByTopic[topic] ?? []) { entry in
+                                        KnowledgeEntryRow(
+                                            entry: entry,
+                                            onSelect: { onSelectEntry(entry) }
+                                        )
+                                        .padding(.horizontal)
+                                    }
+                                } header: {
                                     HStack {
-                                        Image(systemName: "doc.fill")
+                                        Image(systemName: "folder.fill")
                                             .font(.system(size: 12))
-                                            .foregroundStyle(.secondary)
-                                        Text("Documents")
+                                            .foregroundStyle(.blue)
+                                        Text(formatTopicName(topic))
                                             .font(.system(size: 13, weight: .semibold))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(.primary)
+                                        
                                         Spacer()
+                                        
+                                        Text("\(groupedByTopic[topic]?.count ?? 0)")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundStyle(.tertiary)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.secondary.opacity(0.1))
+                                            .clipShape(RoundedRectangle(cornerRadius: 4))
                                     }
                                     .padding(.horizontal)
-                                    .padding(.top, 16)
+                                    .padding(.top, collections.isEmpty && topic == sortedTopics.first ? 8 : 16)
                                 }
                             }
                         }
@@ -181,6 +196,34 @@ struct KnowledgeBrowseView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 100)
+    }
+    
+    /// Extract topic from path (e.g., "research/ai-agents/doc.md" → "ai-agents")
+    private func extractTopic(from path: String) -> String {
+        let components = path.split(separator: "/").map(String.init)
+        
+        // If path is like "research/<topic>/<file>", extract the topic
+        if components.count >= 2 {
+            // Skip first component (research/design/etc) and get second
+            return components[1]
+        }
+        
+        // If path is like "<topic>/<file>", use first component
+        if components.count >= 1 {
+            return components[0]
+        }
+        
+        return "Other"
+    }
+    
+    /// Format topic name for display (e.g., "ai-agents" → "AI Agents")
+    private func formatTopicName(_ topic: String) -> String {
+        topic
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .split(separator: " ")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
     }
 }
 
