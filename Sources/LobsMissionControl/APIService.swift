@@ -175,6 +175,7 @@ final class APIService {
     }
     
     var req = URLRequest(url: url)
+    req.timeoutInterval = 12
     req.httpMethod = method
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -235,6 +236,7 @@ final class APIService {
     }
     
     var req = URLRequest(url: url)
+    req.timeoutInterval = 12
     req.httpMethod = method
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     
@@ -541,7 +543,7 @@ final class APIService {
   
   // MARK: - Inbox
   
-  func loadInboxItems() async throws -> [InboxItem] {
+  func loadInboxItems(limit: Int = 200, offset: Int = 0) async throws -> [InboxItem] {
     struct APIInboxItem: Decodable {
       let id: String
       let title: String?
@@ -557,7 +559,10 @@ final class APIService {
     let items: [APIInboxItem] = try await request(
       method: "GET",
       path: "/api/inbox",
-      queryItems: [URLQueryItem(name: "limit", value: "1000")]
+      queryItems: [
+        URLQueryItem(name: "limit", value: String(limit)),
+        URLQueryItem(name: "offset", value: String(offset))
+      ]
     )
 
     return items.map { item in
@@ -668,11 +673,14 @@ final class APIService {
   
   // MARK: - Agent Documents
   
-  func loadAgentDocuments() async throws -> [AgentDocument] {
+  func loadAgentDocuments(limit: Int = 200, offset: Int = 0) async throws -> [AgentDocument] {
     return try await request(
       method: "GET",
       path: "/api/documents",
-      queryItems: [URLQueryItem(name: "limit", value: "1000")]
+      queryItems: [
+        URLQueryItem(name: "limit", value: String(limit)),
+        URLQueryItem(name: "offset", value: String(offset))
+      ]
     )
   }
   
@@ -1956,6 +1964,7 @@ final class APIService {
     }
     
     var req = URLRequest(url: url)
+    req.timeoutInterval = 12
     req.httpMethod = "GET"
     req.setValue("application/json", forHTTPHeaderField: "Accept")
     

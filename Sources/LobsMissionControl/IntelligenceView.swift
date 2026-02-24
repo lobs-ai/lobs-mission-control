@@ -175,6 +175,7 @@ struct IntelligenceView: View {
     }
     .background(Color(nsColor: .windowBackgroundColor))
     .onAppear {
+      vm.ensureIntelligenceLoaded()
       switch selectedTab {
       case .initiatives:
         Task { await loadInitiatives() }

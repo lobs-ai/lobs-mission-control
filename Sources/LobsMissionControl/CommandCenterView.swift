@@ -274,6 +274,11 @@ struct CommandCenterView: View {
     }
     .background(Color(NSColor.controlBackgroundColor))
     .onAppear {
+      // Lazy-load surfaces this view depends on
+      vm.ensureInboxLoaded()
+      vm.ensureDocumentsLoaded()
+      vm.ensureIntelligenceLoaded()
+
       // Load calendar events
       Task {
         do {

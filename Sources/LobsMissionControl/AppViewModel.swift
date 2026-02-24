@@ -38,6 +38,131 @@ final class AppViewModel: ObservableObject {
   var api: APIService
   var apiService: APIService? { api }
 
+  /// Whether heavy secondary surfaces should be loaded eagerly during global refresh.
+  /// Keep false by default to avoid startup thundering-herd behavior.
+  private let eagerSecondaryLoadsEnabled: Bool = false
+
+  // MARK: - Surface Loaders (lazy, stale-while-revalidate)
+
+  /// Inbox surface loader — created lazily on first access.
+  private(set) lazy var inboxLoader: SurfaceLoader<[InboxItem]> = SurfaceLoader(
+    label: "inbox", ttl: 30, fetch: { [weak self] in
+      guard let self else { throw APIError.invalidURL }
+      return try await self.api.loadInboxItems()
+    }
+  )
+
+  /// Agent documents surface loader.
+  private(set) lazy var documentsLoader: SurfaceLoader<[AgentDocument]> = SurfaceLoader(
+    label: "documents", ttl: 60, fetch: { [weak self] in
+      guard let self else { throw APIError.invalidURL }
+      return try await self.api.loadAgentDocuments()
+    }
+  )
+
+  /// Topics surface loader.
+  private(set) lazy var topicsLoader: SurfaceLoader<[Topic]> = SurfaceLoader(
+    label: "topics", ttl: 120, fetch: { [weak self] in
+      guard let self else { throw APIError.invalidURL }
+      return try await self.api.loadTopics()
+    }
+  )
+
+  /// Intelligence summary loader.
+  private(set) lazy var intelligenceLoader: SurfaceLoader<IntelligenceSummary> = SurfaceLoader(
+    label: "intelligence", ttl: 30, fetch: { [weak self] in
+      guard let self else { throw APIError.invalidURL }
+      return try await self.api.fetchIntelligenceSummary()
+    }
+  )
+
+  /// Agent statuses loader.
+  private(set) lazy var agentStatusesLoader: SurfaceLoader<[String: AgentStatus]> = SurfaceLoader(
+    label: "agentStatuses", ttl: 10, fetch: { [weak self] in
+      guard let self else { throw APIError.invalidURL }
+      return try await self.api.loadAgentStatuses()
+    }
+  )
+
+  // MARK: - View-triggered lazy loads
+
+  /// Called by InboxView / CommandCenterView .onAppear to ensure inbox data is loaded.
+  func ensureInboxLoaded() {
+    Task {
+      if let items = await inboxLoader.load() {
+        var enriched = items
+        for i in enriched.indices {
+          enriched[i].isRead = readItemIds.contains(enriched[i].id)
+        }
+        self.inboxItems = enriched
+      }
+      // Load threads in background after items arrive
+      self.loadInboxThreadsForCurrentItems()
+    }
+  }
+
+  /// Called by DocumentsView / Knowledge .onAppear.
+  func ensureDocumentsLoaded() {
+    Task {
+      if let docs = await documentsLoader.load() {
+        var enriched = docs
+        for i in enriched.indices {
+          enriched[i].isRead = readDocumentIds.contains(enriched[i].id)
+          enriched[i].isStarred = starredDocumentIds.contains(enriched[i].id)
+        }
+        self.agentDocuments = enriched
+      }
+    }
+  }
+
+  /// Called by Intelligence tab .onAppear.
+  func ensureIntelligenceLoaded() {
+    Task {
+      if let summary = await intelligenceLoader.load() {
+        self.intelligenceSummary = summary
+      }
+    }
+  }
+
+  /// Called by Team / Agent views .onAppear.
+  func ensureAgentStatusesLoaded() {
+    Task {
+      if let statuses = await agentStatusesLoader.load() {
+        self.agentStatuses = statuses
+      }
+    }
+  }
+
+  /// Called by Knowledge tab .onAppear.
+  func ensureTopicsLoaded() {
+    Task {
+      if let t = await topicsLoader.load() {
+        self.topics = t
+      }
+    }
+  }
+
+  /// Helper: load inbox threads for currently loaded items (background, non-blocking).
+  private func loadInboxThreadsForCurrentItems() {
+    let items = inboxItems
+    Task.detached(priority: .utility) { [weak self] in
+      guard let self else { return }
+      var loaded: [String: InboxThread] = [:]
+      for item in items {
+        if let thread = try? await self.api.loadInboxThread(docId: item.id) {
+          loaded[item.id] = thread
+        }
+      }
+      await MainActor.run {
+        for (docId, thread) in loaded {
+          if self.pendingThreadWrites[docId] == nil {
+            self.inboxThreadsByDocId[docId] = thread
+          }
+        }
+      }
+    }
+  }
+
   /// Compatibility adapter for legacy call sites that still reference `cache`.
   @MainActor
   private struct TaskCacheAdapter {
@@ -628,12 +753,8 @@ final class AppViewModel: ObservableObject {
       self?.silentReload()
     }
 
-    // Load documents immediately on launch (don't wait for first refresh)
-    if repoURL != nil {
-      loadAgentDocuments()
-      loadTopics()
-      loadResearchRequests()
-    }
+    // Heavy secondary surfaces (documents/topics/research requests) are lazy-loaded
+    // when their views appear, to keep startup resilient.
 
     // Check for dashboard source updates on launch
     checkForDashboardUpdate()
@@ -835,19 +956,26 @@ final class AppViewModel: ObservableObject {
         isGitBusy = false
       }
 
-      // Load secondary data in background (non-blocking)
-      Task.detached(priority: .utility) { [weak self] in
-        guard let self = self else { return }
-        
-        // These can happen async without blocking the main UI
-        await self.loadResearchDataAsync()
-        await self.loadTrackerDataAsync()
-        await self.loadInboxItemsAsync()
-        await self.loadInitiativeReviewLogAsync()
-        await self.loadWorkerStatusAsync()
-        await self.loadAgentStatusesAsync()
-        await self.loadAgentDocumentsAsync()
-        await self.loadIntelligenceSummaryAsync()
+      // Load only lightweight global data during baseline refresh.
+      // Heavy surfaces are fetched lazily when their views appear.
+      if eagerSecondaryLoadsEnabled {
+        Task.detached(priority: .utility) { [weak self] in
+          guard let self = self else { return }
+          await self.loadResearchDataAsync()
+          await self.loadTrackerDataAsync()
+          await self.loadInboxItemsAsync()
+          await self.loadInitiativeReviewLogAsync()
+          await self.loadWorkerStatusAsync()
+          await self.loadAgentStatusesAsync()
+          await self.loadAgentDocumentsAsync()
+          await self.loadIntelligenceSummaryAsync()
+        }
+      } else {
+        Task.detached(priority: .utility) { [weak self] in
+          guard let self = self else { return }
+          await self.loadWorkerStatusAsync()
+          await self.loadIntelligenceSummaryAsync()
+        }
       }
 
       // Check for updates in background (low priority)
@@ -1333,16 +1461,20 @@ final class AppViewModel: ObservableObject {
         isGitBusy = false
       }
 
-      // Load secondary data in background (non-blocking)
+      // Keep reload lightweight by default; fetch heavy surfaces lazily.
       Task.detached(priority: .utility) { [weak self] in
         guard let self = self else { return }
-        
-        await self.loadResearchDataAsync()
-        await self.loadTrackerDataAsync()
-        await self.loadInboxItemsAsync()
-        await self.loadInitiativeReviewLogAsync()
-        await self.loadWorkerStatusAsync()
-        
+
+        if self.eagerSecondaryLoadsEnabled {
+          await self.loadResearchDataAsync()
+          await self.loadTrackerDataAsync()
+          await self.loadInboxItemsAsync()
+          await self.loadInitiativeReviewLogAsync()
+          await self.loadWorkerStatusAsync()
+        } else {
+          await self.loadWorkerStatusAsync()
+        }
+
         await MainActor.run {
           self.loadProjectReadme()
           self.loadTemplates()
