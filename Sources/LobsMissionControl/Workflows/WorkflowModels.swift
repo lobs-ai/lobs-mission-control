@@ -1,0 +1,238 @@
+import Foundation
+
+// MARK: - Workflow Definition
+
+struct WorkflowDefinition: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let description: String?
+    let version: Int
+    let nodes: [WorkflowNode]
+    let edges: [WorkflowEdge]
+    let trigger: WorkflowTrigger?
+    let metadata: WorkflowMetadata?
+    let isActive: Bool
+    let nodeCount: Int
+    let createdAt: String?
+    let updatedAt: String?
+
+    static func == (lhs: WorkflowDefinition, rhs: WorkflowDefinition) -> Bool {
+        lhs.id == rhs.id && lhs.version == rhs.version
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+struct WorkflowNode: Codable, Identifiable, Hashable {
+    let id: String
+    let type: String
+    let config: [String: AnyCodable]?
+    let onSuccess: String?
+    let onFailure: WorkflowFailurePolicy?
+    let inputs: [String]?
+    let timeoutSeconds: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, config, inputs
+        case onSuccess = "on_success"
+        case onFailure = "on_failure"
+        case timeoutSeconds = "timeout_seconds"
+    }
+
+    static func == (lhs: WorkflowNode, rhs: WorkflowNode) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+struct WorkflowFailurePolicy: Codable, Hashable {
+    let retry: Int?
+    let fallback: String?
+    let escalateAfter: Int?
+    let abortOn: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case retry, fallback
+        case escalateAfter = "escalate_after"
+        case abortOn = "abort_on"
+    }
+}
+
+struct WorkflowEdge: Codable, Hashable {
+    let from: String
+    let to: String
+    let condition: String?
+}
+
+struct WorkflowTrigger: Codable, Hashable {
+    let type: String?
+    let cron: String?
+    let timezone: String?
+    let eventPattern: String?
+    let agentTypes: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case type, cron, timezone
+        case eventPattern = "event_pattern"
+        case agentTypes = "agent_types"
+    }
+}
+
+struct WorkflowMetadata: Codable, Hashable {
+    let author: String?
+    let category: String?
+    let system: Bool?
+}
+
+// MARK: - Workflow Run
+
+struct WorkflowRun: Codable, Identifiable, Hashable {
+    let id: String
+    let workflowId: String
+    let workflowVersion: Int
+    let taskId: String?
+    let triggerType: String
+    let status: String
+    let currentNode: String?
+    let nodeStates: [String: NodeState]?
+    let error: String?
+    let sessionKey: String?
+    let startedAt: String?
+    let finishedAt: String?
+    let createdAt: String?
+
+    static func == (lhs: WorkflowRun, rhs: WorkflowRun) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+struct NodeState: Codable, Hashable {
+    let status: String?
+    let attempts: Int?
+    let error: String?
+    let output: [String: AnyCodable]?
+    let startedAt: String?
+    let finishedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case status, attempts, error, output
+        case startedAt = "started_at"
+        case finishedAt = "finished_at"
+    }
+}
+
+// MARK: - Run Trace
+
+struct WorkflowRunTrace: Codable {
+    let runId: String
+    let workflow: String
+    let status: String
+    let startedAt: String?
+    let finishedAt: String?
+    let nodes: [TraceNode]
+
+    enum CodingKeys: String, CodingKey {
+        case workflow, status, nodes
+        case runId = "run_id"
+        case startedAt = "started_at"
+        case finishedAt = "finished_at"
+    }
+}
+
+struct TraceNode: Codable, Identifiable, Hashable {
+    let id: String
+    let type: String
+    let status: String
+    let attempts: Int
+    let error: String?
+    let startedAt: String?
+    let finishedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, status, attempts, error
+        case startedAt = "started_at"
+        case finishedAt = "finished_at"
+    }
+}
+
+// MARK: - AnyCodable (lightweight JSON bridge)
+
+struct AnyCodable: Codable, Hashable {
+    let value: Any
+
+    init(_ value: Any) {
+        self.value = value
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            value = NSNull()
+        } else if let b = try? container.decode(Bool.self) {
+            value = b
+        } else if let i = try? container.decode(Int.self) {
+            value = i
+        } else if let d = try? container.decode(Double.self) {
+            value = d
+        } else if let s = try? container.decode(String.self) {
+            value = s
+        } else if let a = try? container.decode([AnyCodable].self) {
+            value = a.map(\.value)
+        } else if let d = try? container.decode([String: AnyCodable].self) {
+            value = d.mapValues(\.value)
+        } else {
+            value = NSNull()
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch value {
+        case is NSNull:
+            try container.encodeNil()
+        case let b as Bool:
+            try container.encode(b)
+        case let i as Int:
+            try container.encode(i)
+        case let d as Double:
+            try container.encode(d)
+        case let s as String:
+            try container.encode(s)
+        case let a as [Any]:
+            try container.encode(a.map { AnyCodable($0) })
+        case let d as [String: Any]:
+            try container.encode(d.mapValues { AnyCodable($0) })
+        default:
+            try container.encodeNil()
+        }
+    }
+
+    static func == (lhs: AnyCodable, rhs: AnyCodable) -> Bool {
+        String(describing: lhs.value) == String(describing: rhs.value)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(String(describing: value))
+    }
+
+    var stringValue: String {
+        switch value {
+        case let s as String: return s
+        case let i as Int: return "\(i)"
+        case let d as Double: return "\(d)"
+        case let b as Bool: return b ? "true" : "false"
+        case let a as [Any]: return "[\(a.count) items]"
+        case let d as [String: Any]: return "{\(d.count) keys}"
+        default: return "null"
+        }
+    }
+}

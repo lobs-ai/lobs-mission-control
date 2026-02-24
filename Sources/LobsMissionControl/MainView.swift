@@ -8,6 +8,7 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
     case knowledge = "Knowledge"
     case workTracker = "Work Tracker"
     case calendar = "Calendar"
+    case workflows = "Workflows"
     case intelligence = "Intelligence"
     case status = "Status"
     case usage = "Usage"
@@ -24,6 +25,7 @@ enum MainSidebarSection: String, CaseIterable, Identifiable {
         case .knowledge: return "books.vertical.fill"
         case .workTracker: return "clock.badge.checkmark.fill"
         case .calendar: return "calendar"
+        case .workflows: return "arrow.triangle.branch"
         case .intelligence: return "brain.fill"
         case .status: return "chart.bar.fill"
         case .usage: return "chart.pie.fill"
@@ -215,6 +217,15 @@ struct MainView: View {
                     .navigationTitle("Calendar")
             }
             
+        case .workflows:
+            if let apiService = vm.apiService {
+                WorkflowsView(apiService: apiService)
+                    .navigationTitle("Workflows")
+            } else {
+                Text("API Service not available")
+                    .navigationTitle("Workflows")
+            }
+
         case .intelligence:
             IntelligenceView(vm: vm)
                 .navigationTitle("Intelligence")
