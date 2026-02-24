@@ -1,3 +1,3 @@
-Made Workflows view use a fixed two-column layout (HStack + divider) so the workflow list/detail pane is no longer user-resizable and no longer shifts sizes when selecting workflows. Added WorkflowsLayoutStabilityTests to cover this layout behavior.
-
-Tests: ran swift test before/after; both fail in this environment with baseline issue `no such module 'XCTest'` (first seen in AddTaskProjectPreselectionTests.swift).
+Implemented workflow connection fixes: WorkflowEdge now decodes both from/to and source/target, and workflow graph node cards now show incoming/outgoing connections more clearly (larger cards + multiline labels).
+Added WorkflowEdgeDecodingTests covering standard decoding, source/target fallback, and encoding shape.
+Validation: swift build passed; swift test (including filtered run) fails in this environment with `no such module 'XCTest'` (pre-existing toolchain issue).

@@ -11,7 +11,7 @@ struct WorkflowGraphView: View {
     @State private var hideUnrelated: Bool = false
 
     private let nodeWidth: CGFloat = 196
-    private let nodeHeight: CGFloat = 68
+    private let nodeHeight: CGFloat = 112
     private let horizontalSpacing: CGFloat = 92
     private let verticalSpacing: CGFloat = 34
 
@@ -48,6 +48,10 @@ struct WorkflowGraphView: View {
             related.insert(edge.to)
         }
         return related
+    }
+
+    private var nodeConnections: [String: WorkflowNodeConnections] {
+        WorkflowConnectionSummary.build(nodes: nodes, edges: allEdges)
     }
 
     var body: some View {
@@ -136,6 +140,7 @@ struct WorkflowGraphView: View {
                     if !(hideUnrelated && unrelated) {
                         NodeChip(
                             node: node,
+                            connections: nodeConnections[node.id] ?? .empty,
                             isSelected: selectedNode?.id == node.id,
                             isCurrentRunNode: currentRunNode == node.id,
                             runState: runNodeStates?[node.id],
@@ -182,8 +187,39 @@ struct ResolvedEdge: Identifiable, Hashable {
     let to: String
     let kind: Kind
     let label: String?
-    var id: String { "\(from)->\(to):\(kind.rawValue)" }
+    var id: String { "\(from)->\(to):\(kind.rawValue):\(label ?? "")" }
     enum Kind: String { case normal, success, failure }
+}
+
+struct WorkflowNodeConnections: Equatable {
+    let incoming: [String]
+    let outgoing: [String]
+
+    static let empty = WorkflowNodeConnections(incoming: [], outgoing: [])
+}
+
+enum WorkflowConnectionSummary {
+    static func build(nodes: [WorkflowNode], edges: [ResolvedEdge]) -> [String: WorkflowNodeConnections] {
+        let nodeIds = Set(nodes.map(\.id))
+        var incoming: [String: Set<String>] = [:]
+        var outgoing: [String: Set<String>] = [:]
+
+        for nodeId in nodeIds {
+            incoming[nodeId] = []
+            outgoing[nodeId] = []
+        }
+
+        for edge in edges where nodeIds.contains(edge.from) && nodeIds.contains(edge.to) {
+            incoming[edge.to, default: []].insert(edge.from)
+            outgoing[edge.from, default: []].insert(edge.to)
+        }
+
+        return Dictionary(uniqueKeysWithValues: nodeIds.map { nodeId in
+            let inList = Array(incoming[nodeId, default: []]).sorted()
+            let outList = Array(outgoing[nodeId, default: []]).sorted()
+            return (nodeId, WorkflowNodeConnections(incoming: inList, outgoing: outList))
+        })
+    }
 }
 
 struct DAGLayout {
@@ -359,6 +395,7 @@ private struct LegendView: View {
 
 struct NodeChip: View {
     let node: WorkflowNode
+    let connections: WorkflowNodeConnections
     let isSelected: Bool
     let isCurrentRunNode: Bool
     let runState: NodeState?
@@ -371,6 +408,20 @@ struct NodeChip: View {
                 Text(node.id).font(.caption.weight(.semibold)).lineLimit(1)
             }
             Text(node.type).font(.system(size: 9)).foregroundColor(.secondary).lineLimit(1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("→ \(outgoingText)")
+                    .foregroundColor(.green.opacity(0.85))
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                Text("← \(incomingText)")
+                    .foregroundColor(.blue.opacity(0.85))
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+            }
+            .font(.system(size: 8))
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             if let state = runState {
                 HStack(spacing: 4) {
                     Circle().fill(statusColor(state.status ?? "unknown")).frame(width: 6, height: 6)
@@ -388,6 +439,14 @@ struct NodeChip: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? nodeColor : (isCurrentRunNode ? .blue : .secondary.opacity(0.3)), lineWidth: isSelected ? 2.5 : 1))
         .shadow(color: isCurrentRunNode ? .blue.opacity(0.35) : .clear, radius: 5)
         .opacity(isDimmed ? 0.35 : 1)
+    }
+
+    private var outgoingText: String {
+        connections.outgoing.isEmpty ? "—" : connections.outgoing.joined(separator: ",")
+    }
+
+    private var incomingText: String {
+        connections.incoming.isEmpty ? "—" : connections.incoming.joined(separator: ",")
     }
 
     private var nodeIcon: String {

@@ -67,6 +67,43 @@ struct WorkflowEdge: Codable, Hashable {
     let from: String
     let to: String
     let condition: String?
+
+    enum CodingKeys: String, CodingKey {
+        case from, to, condition
+        case source, target
+    }
+
+    init(from: String, to: String, condition: String? = nil) {
+        self.from = from
+        self.to = to
+        self.condition = condition
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        let decodedFrom = try container.decodeIfPresent(String.self, forKey: .from)
+            ?? container.decodeIfPresent(String.self, forKey: .source)
+        let decodedTo = try container.decodeIfPresent(String.self, forKey: .to)
+            ?? container.decodeIfPresent(String.self, forKey: .target)
+
+        guard let from = decodedFrom, let to = decodedTo else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: container.codingPath, debugDescription: "Workflow edge must include from/to or source/target")
+            )
+        }
+
+        self.from = from
+        self.to = to
+        self.condition = try container.decodeIfPresent(String.self, forKey: .condition)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(from, forKey: .from)
+        try container.encode(to, forKey: .to)
+        try container.encodeIfPresent(condition, forKey: .condition)
+    }
 }
 
 struct WorkflowTrigger: Codable, Hashable {
