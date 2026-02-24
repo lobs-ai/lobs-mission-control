@@ -54,6 +54,10 @@ struct WorkflowGraphView: View {
         WorkflowConnectionSummary.build(nodes: nodes, edges: allEdges)
     }
 
+    private var nodeLabelsById: [String: String] {
+        Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, NodeChip.shortNodeLabel(for: $0.id)) })
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             controlBar
@@ -141,6 +145,7 @@ struct WorkflowGraphView: View {
                         NodeChip(
                             node: node,
                             connections: nodeConnections[node.id] ?? .empty,
+                            nodeLabelsById: nodeLabelsById,
                             isSelected: selectedNode?.id == node.id,
                             isCurrentRunNode: currentRunNode == node.id,
                             runState: runNodeStates?[node.id],
@@ -349,6 +354,12 @@ struct EdgeLine: View {
             .stroke(edgeColor, style: StrokeStyle(lineWidth: isHighlighted ? 2.4 : 1.6, dash: line.kind == .failure ? [6, 4] : []))
             .opacity(isDimmed ? 0.22 : 1)
 
+            Image(systemName: "arrowtriangle.right.fill")
+                .font(.system(size: 8))
+                .foregroundColor(edgeColor)
+                .position(x: line.end.x - 4, y: line.end.y)
+                .opacity(isDimmed ? 0.25 : 1)
+
             if let label = line.label {
                 Text(label)
                     .font(.system(size: 9).weight(.medium))
@@ -396,6 +407,7 @@ private struct LegendView: View {
 struct NodeChip: View {
     let node: WorkflowNode
     let connections: WorkflowNodeConnections
+    let nodeLabelsById: [String: String]
     let isSelected: Bool
     let isCurrentRunNode: Bool
     let runState: NodeState?
@@ -409,15 +421,9 @@ struct NodeChip: View {
             }
             Text(node.type).font(.system(size: 9)).foregroundColor(.secondary).lineLimit(1)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("→ \(outgoingText)")
-                    .foregroundColor(.green.opacity(0.85))
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                Text("← \(incomingText)")
-                    .foregroundColor(.blue.opacity(0.85))
-                    .lineLimit(2)
-                    .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: 4) {
+                connectionRow(title: "To", symbol: "arrow.turn.down.right", ids: connections.outgoing, color: .green.opacity(0.85))
+                connectionRow(title: "From", symbol: "arrow.turn.up.left", ids: connections.incoming, color: .blue.opacity(0.85))
             }
             .font(.system(size: 8))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -441,12 +447,35 @@ struct NodeChip: View {
         .opacity(isDimmed ? 0.35 : 1)
     }
 
-    private var outgoingText: String {
-        connections.outgoing.isEmpty ? "—" : connections.outgoing.joined(separator: ",")
+    private func connectionRow(title: String, symbol: String, ids: [String], color: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbol)
+                .font(.system(size: 7, weight: .semibold))
+            Text("\(title):")
+                .fontWeight(.semibold)
+
+            if ids.isEmpty {
+                Text("—")
+                    .opacity(0.8)
+            } else {
+                Text(ids.prefix(2).map { nodeLabelsById[$0] ?? Self.shortNodeLabel(for: $0) }.joined(separator: ", "))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if ids.count > 2 {
+                    Text("+\(ids.count - 2)")
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(color.opacity(0.2))
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .foregroundColor(color)
     }
 
-    private var incomingText: String {
-        connections.incoming.isEmpty ? "—" : connections.incoming.joined(separator: ",")
+    static func shortNodeLabel(for id: String) -> String {
+        if id.count <= 10 { return id }
+        return String(id.prefix(4)) + "…" + String(id.suffix(3))
     }
 
     private var nodeIcon: String {

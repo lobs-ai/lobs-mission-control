@@ -1,3 +1,1 @@
-Implemented workflow connection fixes: WorkflowEdge now decodes both from/to and source/target, and workflow graph node cards now show incoming/outgoing connections more clearly (larger cards + multiline labels).
-Added WorkflowEdgeDecodingTests covering standard decoding, source/target fallback, and encoding shape.
-Validation: swift build passed; swift test (including filtered run) fails in this environment with `no such module 'XCTest'` (pre-existing toolchain issue).
+Updated workflow graph nodes to clearly show incoming/outgoing node connections with directional labels, shortened node IDs, and edge arrowheads for a more graph-like visualization. Added WorkflowGraphConnectionsDisplayTests for connection summary behavior and node label formatting. swift build passes; swift test currently fails in this environment with "no such module XCTest" baseline issue.
