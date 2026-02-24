@@ -24,14 +24,19 @@ struct WorkflowsView: View {
         filtered.filter { $0.metadata?.system != true && $0.metadata?.category != "system" }
     }
 
+    private let sidebarWidth: CGFloat = 320
+
     var body: some View {
-        HSplitView {
+        HStack(spacing: 0) {
             workflowList
-                .frame(minWidth: 280, idealWidth: 320)
+                .frame(width: sidebarWidth)
+
+            Divider()
 
             if let wf = selectedWorkflow {
                 WorkflowDetailView(workflow: wf, apiService: apiService)
                     .id(wf.id + "-v\(wf.version)")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 emptyState
             }
