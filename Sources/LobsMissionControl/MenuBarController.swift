@@ -27,7 +27,7 @@ final class MenuBarController: NSObject {
       item.menu = menu
     }
 
-    // Rebuild whenever tasks/projects change.
+    // Rebuild whenever tasks/projects/inbox/agents change.
     cancellables.removeAll()
     viewModel.$tasks
       .receive(on: RunLoop.main)
@@ -39,7 +39,12 @@ final class MenuBarController: NSObject {
       .sink { [weak self] _ in self?.refresh() }
       .store(in: &cancellables)
 
-    viewModel.$selectedTaskId
+    viewModel.$inboxItems
+      .receive(on: RunLoop.main)
+      .sink { [weak self] _ in self?.refresh() }
+      .store(in: &cancellables)
+
+    viewModel.$agentStatuses
       .receive(on: RunLoop.main)
       .sink { [weak self] _ in self?.refresh() }
       .store(in: &cancellables)
@@ -62,47 +67,58 @@ final class MenuBarController: NSObject {
   private func refresh() {
     guard let statusItem, let menu else { return }
 
-    let (current, next) = computeCurrentAndNextTask()
+    let stats = computeStats()
 
-    // Title: keep it compact; menu bar real estate is precious.
-    let title: String
-    if let current {
-      title = truncateTitle(current.title, max: 26)
-      let nextText = next?.title ?? "(none)"
-      statusItem.button?.toolTip = "Current: \(current.title)\nNext: \(nextText)"
-    } else {
-      title = "No tasks"
-      statusItem.button?.toolTip = "No active tasks"
-    }
+    // Title: compact with symbols and numbers
+    let titleParts = buildTitleParts(stats: stats)
+    let title = titleParts.isEmpty ? "Lobs" : titleParts.joined(separator: " ")
     statusItem.button?.title = title
+    statusItem.button?.toolTip = buildTooltip(stats: stats)
 
     // Menu
     menu.removeAllItems()
 
-    if let current {
-      let cur = NSMenuItem(title: "Current: \(current.title)", action: #selector(selectTaskFromMenu(_:)), keyEquivalent: "")
-      cur.target = self
-      cur.representedObject = current.id
-      menu.addItem(cur)
-    } else {
-      let cur = NSMenuItem(title: "Current: (none)", action: nil, keyEquivalent: "")
-      cur.isEnabled = false
-      menu.addItem(cur)
-    }
+    // Task counts section
+    let tasksHeader = NSMenuItem(title: "Tasks", action: nil, keyEquivalent: "")
+    tasksHeader.isEnabled = false
+    menu.addItem(tasksHeader)
 
-    if let next {
-      let nxt = NSMenuItem(title: "Next: \(next.title)", action: #selector(selectTaskFromMenu(_:)), keyEquivalent: "")
-      nxt.target = self
-      nxt.representedObject = next.id
-      menu.addItem(nxt)
-    } else {
-      let nxt = NSMenuItem(title: "Next: (none)", action: nil, keyEquivalent: "")
-      nxt.isEnabled = false
-      menu.addItem(nxt)
+    let inboxItem = NSMenuItem(title: "  📥 Inbox: \(stats.inboxCount)", action: #selector(showInbox(_:)), keyEquivalent: "")
+    inboxItem.target = self
+    menu.addItem(inboxItem)
+
+    let activeItem = NSMenuItem(title: "  ⚡ Active: \(stats.activeCount)", action: #selector(showActiveTasks(_:)), keyEquivalent: "")
+    activeItem.target = self
+    menu.addItem(activeItem)
+
+    let waitingItem = NSMenuItem(title: "  ⏸ Waiting: \(stats.waitingCount)", action: #selector(showWaitingTasks(_:)), keyEquivalent: "")
+    waitingItem.target = self
+    menu.addItem(waitingItem)
+
+    if stats.unreadInboxCount > 0 {
+      let unreadItem = NSMenuItem(title: "  ⚠️ Unread Items: \(stats.unreadInboxCount)", action: #selector(showInbox(_:)), keyEquivalent: "")
+      unreadItem.target = self
+      menu.addItem(unreadItem)
     }
 
     menu.addItem(.separator())
 
+    // Agents section
+    let agentsHeader = NSMenuItem(title: "Agents", action: nil, keyEquivalent: "")
+    agentsHeader.isEnabled = false
+    menu.addItem(agentsHeader)
+
+    let workingItem = NSMenuItem(title: "  🤖 Working: \(stats.workingAgents)", action: #selector(showTeam(_:)), keyEquivalent: "")
+    workingItem.target = self
+    menu.addItem(workingItem)
+
+    let idleItem = NSMenuItem(title: "  💤 Idle: \(stats.idleAgents)", action: #selector(showTeam(_:)), keyEquivalent: "")
+    idleItem.target = self
+    menu.addItem(idleItem)
+
+    menu.addItem(.separator())
+
+    // Actions
     let open = NSMenuItem(title: "Open Dashboard", action: #selector(openDashboard(_:)), keyEquivalent: "")
     open.target = self
     menu.addItem(open)
@@ -120,81 +136,117 @@ final class MenuBarController: NSObject {
     menu.addItem(quit)
   }
 
-  private func computeCurrentAndNextTask() -> (current: DashboardTask?, next: DashboardTask?) {
-    guard let vm else { return (nil, nil) }
+  private struct MenuBarStats {
+    var inboxCount: Int = 0
+    var activeCount: Int = 0
+    var waitingCount: Int = 0
+    var unreadInboxCount: Int = 0
+    var workingAgents: Int = 0
+    var idleAgents: Int = 0
+  }
+
+  private func computeStats() -> MenuBarStats {
+    guard let vm else { return MenuBarStats() }
+
+    var stats = MenuBarStats()
 
     let projectsById = Dictionary(uniqueKeysWithValues: vm.projects.map { ($0.id, $0) })
 
-    // Prefer actionable work: active/waiting_on/unknown statuses.
-    // Inbox is treated as lower priority (it’s a staging area).
-    var actionable: [DashboardTask] = []
-    var inbox: [DashboardTask] = []
-
-    for t in vm.tasks {
-      // Skip archived projects.
-      let pid = t.projectId ?? "default"
+    // Count tasks by status (excluding archived projects)
+    for task in vm.tasks {
+      let pid = task.projectId ?? "default"
       if let p = projectsById[pid], (p.archived ?? false) == true { continue }
 
-      switch t.status {
-      case .completed, .rejected:
-        continue
+      switch task.status {
       case .inbox:
-        inbox.append(t)
-      case .active, .waitingOn, .other:
-        actionable.append(t)
+        stats.inboxCount += 1
+      case .active:
+        stats.activeCount += 1
+      case .waitingOn:
+        stats.waitingCount += 1
+      case .completed, .rejected, .other:
+        break
       }
     }
 
-    let sortedActionable = sortForMenubar(actionable)
-    let sortedInbox = sortForMenubar(inbox)
+    // Count unread inbox items
+    stats.unreadInboxCount = vm.inboxItems.filter { !$0.isRead }.count
 
-    let all = sortedActionable + sortedInbox
-    guard !all.isEmpty else { return (nil, nil) }
-
-    // If the user already has a selected task, treat it as “current” when it still exists.
-    if let sel = vm.selectedTaskId, let selected = all.first(where: { $0.id == sel }) {
-      let next = all.first(where: { $0.id != selected.id })
-      return (selected, next)
+    // Count agents by status
+    for (_, agent) in vm.agentStatuses {
+      if agent.status == "working" || agent.status == "thinking" || agent.status == "finalizing" {
+        stats.workingAgents += 1
+      } else if agent.status == "idle" {
+        stats.idleAgents += 1
+      }
     }
 
-    let cur = all.first
-    let nxt = all.dropFirst().first
-    return (cur, nxt)
+    return stats
   }
 
-  private func sortForMenubar(_ tasks: [DashboardTask]) -> [DashboardTask] {
-    tasks.sorted { a, b in
-      let ap = a.pinned ?? false
-      let bp = b.pinned ?? false
-      if ap != bp { return ap && !bp }
+  private func buildTitleParts(stats: MenuBarStats) -> [String] {
+    var parts: [String] = []
 
-      let oa = a.sortOrder ?? Int.max
-      let ob = b.sortOrder ?? Int.max
-      if oa != ob { return oa < ob }
-
-      if a.createdAt != b.createdAt { return a.createdAt > b.createdAt }
-      return a.updatedAt > b.updatedAt
+    // Show counts only if non-zero to keep it compact
+    if stats.inboxCount > 0 {
+      parts.append("📥\(stats.inboxCount)")
     }
+
+    if stats.activeCount > 0 {
+      parts.append("⚡\(stats.activeCount)")
+    }
+
+    if stats.waitingCount > 0 {
+      parts.append("⏸\(stats.waitingCount)")
+    }
+
+    if stats.workingAgents > 0 {
+      parts.append("🤖\(stats.workingAgents)")
+    }
+
+    if stats.unreadInboxCount > 0 {
+      parts.append("⚠️\(stats.unreadInboxCount)")
+    }
+
+    return parts
   }
 
-  private func truncateTitle(_ title: String, max: Int) -> String {
-    guard title.count > max else { return title }
-    let idx = title.index(title.startIndex, offsetBy: max)
-    return String(title[..<idx]) + "…"
+  private func buildTooltip(stats: MenuBarStats) -> String {
+    var lines: [String] = []
+
+    lines.append("Lobs Mission Control")
+    lines.append("")
+    lines.append("Tasks:")
+    lines.append("  📥 Inbox: \(stats.inboxCount)")
+    lines.append("  ⚡ Active: \(stats.activeCount)")
+    lines.append("  ⏸ Waiting: \(stats.waitingCount)")
+
+    if stats.unreadInboxCount > 0 {
+      lines.append("  ⚠️ Unread Items: \(stats.unreadInboxCount)")
+    }
+
+    lines.append("")
+    lines.append("Agents:")
+    lines.append("  🤖 Working: \(stats.workingAgents)")
+    lines.append("  💤 Idle: \(stats.idleAgents)")
+
+    return lines.joined(separator: "\n")
   }
 
-  @objc private func selectTaskFromMenu(_ sender: NSMenuItem) {
-    guard let id = sender.representedObject as? String,
-          let vm else { return }
-
+  @objc private func showInbox(_ sender: Any?) {
     openDashboard(nil)
+  }
 
-    // Best-effort select without changing project; the main UI already scopes
-    // tasks by selected project. Selecting a task from another project is still
-    // useful because it drives artifact preview + deep link behavior.
-    if let t = vm.tasks.first(where: { $0.id == id }) {
-      vm.selectTask(t)
-    }
+  @objc private func showActiveTasks(_ sender: Any?) {
+    openDashboard(nil)
+  }
+
+  @objc private func showWaitingTasks(_ sender: Any?) {
+    openDashboard(nil)
+  }
+
+  @objc private func showTeam(_ sender: Any?) {
+    openDashboard(nil)
   }
 
   @objc private func openDashboard(_ sender: Any?) {

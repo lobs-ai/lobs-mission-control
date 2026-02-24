@@ -835,7 +835,7 @@ private struct InitiativeDetailView: View {
             
             HStack(spacing: 6) {
               if let project = vm.projects.first(where: { $0.id == (task.projectId ?? "default") }) {
-                Text(project.name)
+                Text(project.title)
                   .font(.caption)
                   .foregroundStyle(.secondary)
               }
