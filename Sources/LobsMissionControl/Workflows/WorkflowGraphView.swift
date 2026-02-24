@@ -11,7 +11,7 @@ struct WorkflowGraphView: View {
     @State private var hideUnrelated: Bool = false
 
     private let nodeWidth: CGFloat = 220
-    private let nodeHeight: CGFloat = 132
+    private let nodeHeight: CGFloat = 168
     private let horizontalSpacing: CGFloat = 92
     private let verticalSpacing: CGFloat = 34
 
@@ -376,9 +376,9 @@ struct EdgeLine: View {
 
     private var edgeColor: Color {
         switch line.kind {
-        case .success: return .green.opacity(0.75)
-        case .failure: return .red.opacity(0.75)
-        case .normal: return .secondary.opacity(0.62)
+        case .success: return .green.opacity(0.8)
+        case .failure: return .red.opacity(0.8)
+        case .normal: return .blue.opacity(0.72)
         }
     }
 }
@@ -426,14 +426,14 @@ struct NodeChip: View {
                 .lineLimit(1)
 
             Text(Self.connectionSummary(incoming: connections.incoming.count, outgoing: connections.outgoing.count))
-                .font(.system(size: 8, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.secondary)
 
-            VStack(alignment: .leading, spacing: 4) {
-                connectionRow(title: "To", symbol: "arrowshape.right.fill", ids: connections.outgoing, color: .green.opacity(0.88))
-                connectionRow(title: "From", symbol: "arrowshape.left.fill", ids: connections.incoming, color: .blue.opacity(0.88))
+            VStack(alignment: .leading, spacing: 5) {
+                connectionRow(title: "To", symbol: "arrowshape.right.fill", ids: connections.outgoing, color: .green.opacity(0.9))
+                connectionRow(title: "From", symbol: "arrowshape.left.fill", ids: connections.incoming, color: .blue.opacity(0.9))
             }
-            .font(.system(size: 8))
+            .font(.system(size: 10))
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let state = runState {
@@ -456,30 +456,23 @@ struct NodeChip: View {
     }
 
     private func connectionRow(title: String, symbol: String, ids: [String], color: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(alignment: .top, spacing: 5) {
             Image(systemName: symbol)
-                .font(.system(size: 7, weight: .semibold))
+                .font(.system(size: 8, weight: .semibold))
+                .padding(.top, 2)
             Text("\(title):")
                 .fontWeight(.semibold)
 
-            if ids.isEmpty {
-                Text("—")
-                    .opacity(0.8)
-            } else {
-                Text(Self.connectionTokens(ids: ids, nodeLabelsById: nodeLabelsById, limit: 2).joined(separator: ", "))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if ids.count > 2 {
-                    Text("+\(ids.count - 2)")
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(color.opacity(0.2))
-                        .clipShape(Capsule())
-                }
-            }
+            Text(Self.connectionPreviewText(ids: ids, nodeLabelsById: nodeLabelsById, limit: Self.connectionTokenPreviewLimit))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .foregroundColor(color)
     }
+
+    static let connectionTokenPreviewLimit = 5
 
     static func connectionSummary(incoming: Int, outgoing: Int) -> String {
         "\(incoming) in · \(outgoing) out"
@@ -487,6 +480,15 @@ struct NodeChip: View {
 
     static func connectionTokens(ids: [String], nodeLabelsById: [String: String], limit: Int) -> [String] {
         ids.prefix(limit).map { nodeLabelsById[$0] ?? shortNodeLabel(for: $0) }
+    }
+
+    static func connectionPreviewText(ids: [String], nodeLabelsById: [String: String], limit: Int) -> String {
+        guard !ids.isEmpty else { return "none" }
+        let tokens = connectionTokens(ids: ids, nodeLabelsById: nodeLabelsById, limit: limit)
+        if ids.count > limit {
+            return tokens.joined(separator: ", ") + " +\(ids.count - limit)"
+        }
+        return tokens.joined(separator: ", ")
     }
 
     static func shortNodeLabel(for id: String) -> String {

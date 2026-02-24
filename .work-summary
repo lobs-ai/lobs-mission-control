@@ -1,1 +1,3 @@
-Updated workflow graph nodes to visibly show connection counts and linked node labels directly in each node card, and expanded card sizing for readability. Added tests for new NodeChip connection summary/token formatting helpers. `swift build` passes; `swift test` fails in this environment with `no such module 'XCTest'`.
+Updated workflow graph nodes to better surface connections: taller nodes and multiline in/out connection previews with overflow counts so each node clearly shows linked nodes. Added tests for new connection preview text behavior and updated preview-limit expectation.
+
+Validation: `swift build` passes. `swift test` / `swift test --filter WorkflowGraphConnectionsDisplayTests` fail in this environment due existing `no such module 'XCTest'` errors (baseline issue starting at `AddTaskProjectPreselectionTests.swift`).

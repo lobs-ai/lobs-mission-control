@@ -33,6 +33,23 @@ final class WorkflowGraphConnectionsDisplayTests: XCTestCase {
         XCTAssertEqual(NodeChip.connectionSummary(incoming: 2, outgoing: 5), "2 in · 5 out")
     }
 
+    func testConnectionTokenPreviewLimitMatchesGraphDisplayExpectation() {
+        XCTAssertEqual(NodeChip.connectionTokenPreviewLimit, 5)
+    }
+
+    func testConnectionPreviewTextShowsOverflowCount() {
+        let ids = ["a", "b", "c", "d", "e", "f"]
+        let labels = ["a": "alpha", "b": "beta"]
+
+        let preview = NodeChip.connectionPreviewText(ids: ids, nodeLabelsById: labels, limit: 5)
+
+        XCTAssertEqual(preview, "alpha, beta, c, d, e +1")
+    }
+
+    func testConnectionPreviewTextShowsNoneForEmptyConnections() {
+        XCTAssertEqual(NodeChip.connectionPreviewText(ids: [], nodeLabelsById: [:], limit: 5), "none")
+    }
+
     func testConnectionTokensPreferFriendlyLabelsAndFallBackToShortIds() {
         let ids = ["node-alpha", "node-beta", "abcdef123456"]
         let labels = ["node-alpha": "alpha"]
