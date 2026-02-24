@@ -10,8 +10,8 @@ struct WorkflowGraphView: View {
     @State private var zoom: CGFloat = 1.0
     @State private var hideUnrelated: Bool = false
 
-    private let nodeWidth: CGFloat = 196
-    private let nodeHeight: CGFloat = 112
+    private let nodeWidth: CGFloat = 220
+    private let nodeHeight: CGFloat = 132
     private let horizontalSpacing: CGFloat = 92
     private let verticalSpacing: CGFloat = 34
 
@@ -414,16 +414,24 @@ struct NodeChip: View {
     let isDimmed: Bool
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 6) {
             HStack(spacing: 5) {
                 Image(systemName: nodeIcon).font(.caption).foregroundColor(nodeColor)
                 Text(node.id).font(.caption.weight(.semibold)).lineLimit(1)
             }
-            Text(node.type).font(.system(size: 9)).foregroundColor(.secondary).lineLimit(1)
+
+            Text(node.type)
+                .font(.system(size: 9))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+
+            Text(Self.connectionSummary(incoming: connections.incoming.count, outgoing: connections.outgoing.count))
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundColor(.secondary)
 
             VStack(alignment: .leading, spacing: 4) {
-                connectionRow(title: "To", symbol: "arrow.turn.down.right", ids: connections.outgoing, color: .green.opacity(0.85))
-                connectionRow(title: "From", symbol: "arrow.turn.up.left", ids: connections.incoming, color: .blue.opacity(0.85))
+                connectionRow(title: "To", symbol: "arrowshape.right.fill", ids: connections.outgoing, color: .green.opacity(0.88))
+                connectionRow(title: "From", symbol: "arrowshape.left.fill", ids: connections.incoming, color: .blue.opacity(0.88))
             }
             .font(.system(size: 8))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -458,7 +466,7 @@ struct NodeChip: View {
                 Text("—")
                     .opacity(0.8)
             } else {
-                Text(ids.prefix(2).map { nodeLabelsById[$0] ?? Self.shortNodeLabel(for: $0) }.joined(separator: ", "))
+                Text(Self.connectionTokens(ids: ids, nodeLabelsById: nodeLabelsById, limit: 2).joined(separator: ", "))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if ids.count > 2 {
@@ -471,6 +479,14 @@ struct NodeChip: View {
             }
         }
         .foregroundColor(color)
+    }
+
+    static func connectionSummary(incoming: Int, outgoing: Int) -> String {
+        "\(incoming) in · \(outgoing) out"
+    }
+
+    static func connectionTokens(ids: [String], nodeLabelsById: [String: String], limit: Int) -> [String] {
+        ids.prefix(limit).map { nodeLabelsById[$0] ?? shortNodeLabel(for: $0) }
     }
 
     static func shortNodeLabel(for id: String) -> String {

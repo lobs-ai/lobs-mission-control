@@ -27,4 +27,18 @@ final class WorkflowGraphConnectionsDisplayTests: XCTestCase {
         XCTAssertEqual(NodeChip.shortNodeLabel(for: "abcd1234efgh"), "abcd…fgh")
         XCTAssertEqual(NodeChip.shortNodeLabel(for: "short"), "short")
     }
+
+    func testConnectionSummaryTextShowsIncomingAndOutgoingCounts() {
+        XCTAssertEqual(NodeChip.connectionSummary(incoming: 0, outgoing: 0), "0 in · 0 out")
+        XCTAssertEqual(NodeChip.connectionSummary(incoming: 2, outgoing: 5), "2 in · 5 out")
+    }
+
+    func testConnectionTokensPreferFriendlyLabelsAndFallBackToShortIds() {
+        let ids = ["node-alpha", "node-beta", "abcdef123456"]
+        let labels = ["node-alpha": "alpha"]
+
+        let tokens = NodeChip.connectionTokens(ids: ids, nodeLabelsById: labels, limit: 3)
+
+        XCTAssertEqual(tokens, ["alpha", "node-beta", "abcd…456"])
+    }
 }
