@@ -34,12 +34,8 @@ struct WorkflowNode: Codable, Identifiable, Hashable {
     let inputs: [String]?
     let timeoutSeconds: Int?
 
-    enum CodingKeys: String, CodingKey {
-        case id, type, config, inputs
-        case onSuccess = "on_success"
-        case onFailure = "on_failure"
-        case timeoutSeconds = "timeout_seconds"
-    }
+    // No manual CodingKeys — APIService uses .convertFromSnakeCase which automatically
+    // converts on_success → onSuccess, on_failure → onFailure, timeout_seconds → timeoutSeconds.
 
     static func == (lhs: WorkflowNode, rhs: WorkflowNode) -> Bool {
         lhs.id == rhs.id
@@ -55,12 +51,7 @@ struct WorkflowFailurePolicy: Codable, Hashable {
     let fallback: String?
     let escalateAfter: Int?
     let abortOn: [String]?
-
-    enum CodingKeys: String, CodingKey {
-        case retry, fallback
-        case escalateAfter = "escalate_after"
-        case abortOn = "abort_on"
-    }
+    // .convertFromSnakeCase handles escalate_after → escalateAfter, abort_on → abortOn
 }
 
 struct WorkflowEdge: Codable, Hashable {
@@ -112,12 +103,7 @@ struct WorkflowTrigger: Codable, Hashable {
     let timezone: String?
     let eventPattern: String?
     let agentTypes: [String]?
-
-    enum CodingKeys: String, CodingKey {
-        case type, cron, timezone
-        case eventPattern = "event_pattern"
-        case agentTypes = "agent_types"
-    }
+    // .convertFromSnakeCase handles event_pattern → eventPattern, agent_types → agentTypes
 }
 
 struct WorkflowMetadata: Codable, Hashable {
@@ -159,12 +145,7 @@ struct NodeState: Codable, Hashable {
     let output: [String: AnyCodable]?
     let startedAt: String?
     let finishedAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case status, attempts, error, output
-        case startedAt = "started_at"
-        case finishedAt = "finished_at"
-    }
+    // .convertFromSnakeCase handles started_at → startedAt, finished_at → finishedAt
 }
 
 // MARK: - Run Trace
@@ -176,13 +157,7 @@ struct WorkflowRunTrace: Codable {
     let startedAt: String?
     let finishedAt: String?
     let nodes: [TraceNode]
-
-    enum CodingKeys: String, CodingKey {
-        case workflow, status, nodes
-        case runId = "run_id"
-        case startedAt = "started_at"
-        case finishedAt = "finished_at"
-    }
+    // .convertFromSnakeCase handles run_id → runId, started_at → startedAt, finished_at → finishedAt
 }
 
 struct TraceNode: Codable, Identifiable, Hashable {
@@ -193,12 +168,7 @@ struct TraceNode: Codable, Identifiable, Hashable {
     let error: String?
     let startedAt: String?
     let finishedAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id, type, status, attempts, error
-        case startedAt = "started_at"
-        case finishedAt = "finished_at"
-    }
+    // .convertFromSnakeCase handles started_at → startedAt, finished_at → finishedAt
 }
 
 // MARK: - AnyCodable (lightweight JSON bridge)
@@ -285,11 +255,7 @@ struct WorkflowCreateRequest: Codable {
     let trigger: WorkflowTrigger?
     let metadata: WorkflowMetadata?
     let isActive: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case name, description, nodes, edges, trigger, metadata
-        case isActive = "is_active"
-    }
+    // APIService encoder uses .convertToSnakeCase: isActive → is_active automatically
 }
 
 struct WorkflowUpdateRequest: Codable {
@@ -300,9 +266,5 @@ struct WorkflowUpdateRequest: Codable {
     var trigger: WorkflowTrigger?
     var metadata: WorkflowMetadata?
     var isActive: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case name, description, nodes, edges, trigger, metadata
-        case isActive = "is_active"
-    }
+    // APIService encoder uses .convertToSnakeCase: isActive → is_active automatically
 }
