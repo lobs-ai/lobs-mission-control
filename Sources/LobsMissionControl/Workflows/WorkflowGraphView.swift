@@ -131,6 +131,7 @@ struct WorkflowGraphView: View {
 
             ForEach(layout.lanes, id: \.stage) { lane in
                 StageLaneBackground(lane: lane)
+                    .allowsHitTesting(false)
             }
 
             ForEach(layout.edgeLines, id: \.id) { line in
@@ -139,12 +140,14 @@ struct WorkflowGraphView: View {
                 let shouldHide = hideUnrelated && selectedNode != nil && !isConnected
                 if !shouldHide {
                     EdgeLine(line: line, isHighlighted: selectedNode == nil || isConnected, isDimmed: shouldDim)
+                        .allowsHitTesting(false)
                 }
             }
 
             ForEach(layout.stageHeaders, id: \.stage) { header in
                 StageHeaderView(header: header)
                     .position(x: header.centerX, y: 18)
+                    .allowsHitTesting(false)
             }
 
             ForEach(nodes) { node in
@@ -184,6 +187,7 @@ struct WorkflowGraphView: View {
 
             LegendView()
                 .position(x: layout.canvasSize.width - 120, y: 30)
+                .allowsHitTesting(false)
         }
         .frame(width: layout.canvasSize.width + 80, height: layout.canvasSize.height + 70)
     }
