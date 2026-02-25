@@ -11,6 +11,15 @@ struct WorkflowDetailView: View {
     @State private var isLoadingRuns = false
     @State private var selectedTab: DetailTab = .graph
 
+    /// Full workflow definition loaded from the detail endpoint.
+    /// The list endpoint often omits `nodes` and `edges` (only includes `nodeCount`).
+    /// We load the full definition here so the graph can show connections.
+    @State private var fullWorkflow: WorkflowDefinition? = nil
+    @State private var isLoadingWorkflow = false
+
+    /// The workflow used for graph rendering — prefer the fully-loaded version.
+    private var displayWorkflow: WorkflowDefinition { fullWorkflow ?? workflow }
+
     enum DetailTab: String, CaseIterable {
         case graph = "Graph"
         case runs = "Runs"
@@ -37,7 +46,11 @@ struct WorkflowDetailView: View {
                 runsView
             }
         }
-        .task { await loadRuns() }
+        .task {
+            async let runs: () = loadRuns()
+            async let full: () = loadFullWorkflow()
+            _ = await (runs, full)
+        }
     }
 
     // MARK: - Header
@@ -67,7 +80,7 @@ struct WorkflowDetailView: View {
                         .font(.caption.monospaced())
                         .foregroundColor(.secondary)
 
-                    Text("\(workflow.nodes.count) nodes")
+                    Text("\(displayWorkflow.nodes.isEmpty ? workflow.nodeCount : displayWorkflow.nodes.count) nodes")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -137,8 +150,12 @@ struct WorkflowDetailView: View {
     private var graphAndDetail: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "info.circle")
-                    .foregroundColor(.secondary)
+                if isLoadingWorkflow {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.secondary)
+                }
                 Text("Click any node to open its details next to the node.")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -148,8 +165,8 @@ struct WorkflowDetailView: View {
             .padding(.bottom, 6)
 
             WorkflowGraphView(
-                nodes: workflow.nodes,
-                edges: workflow.edges,
+                nodes: displayWorkflow.nodes,
+                edges: displayWorkflow.edges,
                 selectedNode: $selectedNode,
                 runNodeStates: selectedRun?.nodeStates,
                 currentRunNode: selectedRun?.currentNode
@@ -190,6 +207,22 @@ struct WorkflowDetailView: View {
     }
 
     // MARK: - Data
+
+    private func loadFullWorkflow() async {
+        // If the list response already included edges, skip the extra round-trip.
+        if !workflow.edges.isEmpty {
+            fullWorkflow = workflow
+            return
+        }
+        isLoadingWorkflow = true
+        do {
+            fullWorkflow = try await apiService.fetchWorkflow(id: workflow.id)
+        } catch {
+            // Fall back to whatever the list endpoint returned.
+            fullWorkflow = workflow
+        }
+        isLoadingWorkflow = false
+    }
 
     private func loadRuns() async {
         isLoadingRuns = true
