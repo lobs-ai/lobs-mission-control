@@ -1,1 +1,1 @@
-Fixed workflow connections not showing: WorkflowDetailView now fetches the full workflow definition via fetchWorkflow(id:) on appear, since the list endpoint (/api/workflows) omits nodes/edges arrays. Graph uses fullWorkflow when available, falling back to the list-response object. Build passes; XCTest module unavailable in this environment (pre-existing).
+BLOCKED: ~/lobs-dashboard-v2 directory does not exist. Cannot replace git-based state with API calls in a non-existent workspace. Task references wrong path or project was not set up.
