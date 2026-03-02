@@ -1371,7 +1371,7 @@ final class AppViewModel: ObservableObject {
   }
 
   func reloadIfPossible() {
-    guard repoURL != nil else { return }
+    // Legacy guard removed — API mode does not require repoURL
     reload()
   }
 

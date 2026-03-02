@@ -103,6 +103,7 @@ final class TasksViewModel: ObservableObject {
                 self.sortTasksForUX(&self.tasks)
             }
         } catch {
+            print("❌ [TasksVM] Failed to load tasks: \(error)")
             await MainActor.run {
                 self.errorMessage = "Failed to load tasks: \(error.localizedDescription)"
             }
@@ -112,10 +113,12 @@ final class TasksViewModel: ObservableObject {
     func loadProjects() async {
         do {
             let loadedProjects = try await apiService.fetchProjects()
+            print("✅ [TasksVM] Loaded \(loadedProjects.count) projects")
             await MainActor.run {
                 self.projects = loadedProjects
             }
         } catch {
+            print("❌ [TasksVM] Failed to load projects: \(error)")
             await MainActor.run {
                 self.errorMessage = "Failed to load projects: \(error.localizedDescription)"
             }
