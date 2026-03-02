@@ -336,10 +336,38 @@ struct DashboardTask: Codable, Identifiable, Hashable {
   var resolvedTrackingMode: TaskTrackingMode { trackingMode ?? .inbox }
 }
 
-enum ProjectType: String, Codable, CaseIterable, Hashable {
+enum ProjectType: Codable, CaseIterable, Hashable {
   case kanban
   case research
   case tracker
+  case other(String)
+
+  static var allCases: [ProjectType] { [.kanban, .research, .tracker] }
+
+  var rawValue: String {
+    switch self {
+    case .kanban: return "kanban"
+    case .research: return "research"
+    case .tracker: return "tracker"
+    case .other(let v): return v
+    }
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    let value = try container.decode(String.self)
+    switch value {
+    case "kanban": self = .kanban
+    case "research": self = .research
+    case "tracker": self = .tracker
+    default: self = .other(value)
+    }
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
 }
 
 struct Project: Codable, Identifiable, Hashable {

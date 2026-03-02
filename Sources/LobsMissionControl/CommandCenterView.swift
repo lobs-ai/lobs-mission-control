@@ -811,6 +811,7 @@ private struct ProjectCard: View {
     case .research: return "magnifyingglass"
     case .tracker: return "checklist"
     case .none: return "folder.fill"
+    default: return "square.grid.2x2.fill"
     }
   }
   
@@ -820,6 +821,7 @@ private struct ProjectCard: View {
     case .research: return .purple
     case .tracker: return .green
     case .none: return .gray
+    default: return .gray
     }
   }
   

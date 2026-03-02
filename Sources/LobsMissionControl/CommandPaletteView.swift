@@ -1111,6 +1111,7 @@ func projectTypeIcon(_ type: ProjectType) -> String {
   case .kanban: return "square.grid.2x2"
   case .research: return "doc.text.magnifyingglass"
   case .tracker: return "list.bullet.clipboard"
+  default: return "square.grid.2x2.fill"
   }
 }
 
@@ -1119,6 +1120,7 @@ func projectTypeAccentColor(_ type: ProjectType) -> Color {
   case .kanban: return .blue
   case .research: return .purple
   case .tracker: return .green
+  default: return .gray
   }
 }
 

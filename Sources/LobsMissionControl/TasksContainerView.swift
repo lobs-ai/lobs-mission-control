@@ -184,6 +184,7 @@ struct TasksContainerView: View {
         case .kanban: return "rectangle.3.group.fill"
         case .research: return "doc.text.magnifyingglass"
         case .tracker: return "chart.bar.fill"
+        default: return "square.grid.2x2.fill"
         }
     }
     
@@ -192,6 +193,7 @@ struct TasksContainerView: View {
         case .kanban: return .blue
         case .research: return .purple
         case .tracker: return .green
+        default: return .gray
         }
     }
     
@@ -812,6 +814,7 @@ private struct RichProjectCard: View {
         case .kanban: return "rectangle.3.group.fill"
         case .research: return "doc.text.magnifyingglass"
         case .tracker: return "chart.bar.fill"
+        default: return "square.grid.2x2.fill"
         }
     }
     
@@ -820,6 +823,7 @@ private struct RichProjectCard: View {
         case .kanban: return .blue
         case .research: return .purple
         case .tracker: return .green
+        default: return .gray
         }
     }
     
