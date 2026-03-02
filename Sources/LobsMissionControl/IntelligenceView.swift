@@ -555,7 +555,9 @@ struct IntelligenceView: View {
     
     do {
       initiatives = try await vm.apiService?.loadInitiatives() ?? []
+      print("✅ [Intelligence] Loaded \(initiatives.count) initiatives")
     } catch {
+      print("❌ [Intelligence] Failed to load initiatives: \(error)")
       await MainActor.run {
         vm.flashError("Failed to load initiatives: \(error.localizedDescription)")
       }
