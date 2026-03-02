@@ -892,7 +892,7 @@ struct WorkerStatus: Codable {
 
   // Live run details (optional; written by worker-register)
   var currentProject: String?
-  var taskLog: [WorkerTaskLogEntry]?
+  var taskLog: SafeTaskLog?
 
   // Optional live token counters (if workers start recording them)
   var inputTokens: Int?
@@ -901,7 +901,39 @@ struct WorkerStatus: Codable {
 
 // MARK: - Worker History
 
-struct WorkerTaskLogEntry: Codable {
+/// Wrapper that decodes [WorkerTaskLogEntry] but gracefully handles dict/null.
+struct SafeTaskLog: Codable, Hashable {
+  var entries: [WorkerTaskLogEntry]
+
+  var isEmpty: Bool { entries.isEmpty }
+  var first: WorkerTaskLogEntry? { entries.first }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    entries = (try? container.decode([WorkerTaskLogEntry].self)) ?? []
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(entries)
+  }
+}
+
+extension SafeTaskLog: Sequence {
+  func makeIterator() -> Array<WorkerTaskLogEntry>.Iterator { entries.makeIterator() }
+}
+
+extension SafeTaskLog: Collection {
+  typealias Index = Int
+  var startIndex: Int { entries.startIndex }
+  var endIndex: Int { entries.endIndex }
+  subscript(position: Int) -> WorkerTaskLogEntry { entries[position] }
+  func index(after i: Int) -> Int { entries.index(after: i) }
+}
+
+extension SafeTaskLog: RandomAccessCollection {}
+
+struct WorkerTaskLogEntry: Codable, Hashable {
   var task: String?
   var project: String?
   var completedAt: Date?
@@ -926,7 +958,8 @@ struct WorkerHistoryRun: Codable, Identifiable {
   var totalCostUSD: Double?
 
   /// Optional: lightweight list of tasks completed during the run.
-  var taskLog: [WorkerTaskLogEntry]?
+  /// Server may return a dict instead of array — decoded via SafeTaskLog.
+  var taskLog: SafeTaskLog?
 
   /// Commit SHAs pushed during this run (for auditability).
   var commitSHAs: [String]?
