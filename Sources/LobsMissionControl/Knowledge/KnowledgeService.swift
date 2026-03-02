@@ -55,10 +55,11 @@ class KnowledgeService: ObservableObject {
             decoder.dateDecodingStrategy = .iso8601
             
             let feedResponse = try decoder.decode(KnowledgeFeedResponse.self, from: data)
+            ksLog.info("✅ Feed loaded: \(feedResponse.entries.count) entries")
             feedEntries = feedResponse.entries
             isLoading = false
         } catch {
-            ksLog.error("❌ Knowledge error: \(error)")
+            ksLog.error("❌ Knowledge feed error: \(error)")
             self.error = error.localizedDescription
             isLoading = false
         }
@@ -235,6 +236,7 @@ class KnowledgeService: ObservableObject {
             
             // Success - no need to handle response
         } catch {
+            ksLog.error("❌ Knowledge sync error: \(error)")
             self.error = error.localizedDescription
         }
     }
