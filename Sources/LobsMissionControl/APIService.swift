@@ -1987,7 +1987,7 @@ final class APIService {
       req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     
-    apiLog.debug("→ \(method) \(url.absoluteString)")
+    apiLog.debug("→ GET \(url.absoluteString)")
     let (data, response): (Data, URLResponse)
     do {
       (data, response) = try await URLSession.shared.data(for: req)
@@ -2007,11 +2007,11 @@ final class APIService {
     
     guard (200..<300).contains(httpResponse.statusCode) else {
       let preview = String(data: data.prefix(300), encoding: .utf8) ?? ""
-      apiLog.warning("← \(httpResponse.statusCode) \(path): \(preview)")
+      apiLog.warning("← \(httpResponse.statusCode) tracker/analysis: \(preview)")
       throw APIError.parseErrorResponse(data, statusCode: httpResponse.statusCode)
     }
     
-    apiLog.debug("← \(httpResponse.statusCode) \(path) (\(data.count) bytes)")
+    apiLog.debug("← \(httpResponse.statusCode) tracker/analysis (\(data.count) bytes)")
     
     // Handle null response (no analysis yet)
     if data.count <= 4 { // "null" is 4 bytes
