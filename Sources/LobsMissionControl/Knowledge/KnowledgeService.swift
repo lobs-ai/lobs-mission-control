@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let ksLog = Logger(subsystem: "com.lobs.missioncontrol", category: "Knowledge")
 
 @MainActor
 class KnowledgeService: ObservableObject {
@@ -55,6 +58,7 @@ class KnowledgeService: ObservableObject {
             feedEntries = feedResponse.entries
             isLoading = false
         } catch {
+            ksLog.error("❌ Knowledge error: \(error)")
             self.error = error.localizedDescription
             isLoading = false
         }
@@ -115,6 +119,7 @@ class KnowledgeService: ObservableObject {
             browseEntries = browseResponse.entries
             isLoading = false
         } catch {
+            ksLog.error("❌ Knowledge error: \(error)")
             self.error = error.localizedDescription
             isLoading = false
         }
@@ -165,6 +170,7 @@ class KnowledgeService: ObservableObject {
             searchResults = browseResponse.entries
             isLoading = false
         } catch {
+            ksLog.error("❌ Knowledge error: \(error)")
             self.error = error.localizedDescription
             isLoading = false
         }

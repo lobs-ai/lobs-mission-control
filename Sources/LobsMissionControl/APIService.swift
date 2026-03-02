@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let apiLog = Logger(subsystem: "com.lobs.missioncontrol", category: "API")
 
 enum APIError: Error, LocalizedError {
   case invalidURL
@@ -193,6 +196,7 @@ final class APIService {
       }
     }
     
+    apiLog.debug("→ \(method) \(url.absoluteString)")
     let (data, response): (Data, URLResponse)
     do {
       (data, response) = try await URLSession.shared.data(for: req)
@@ -212,12 +216,18 @@ final class APIService {
     }
     
     guard (200..<300).contains(httpResponse.statusCode) else {
+      let preview = String(data: data.prefix(300), encoding: .utf8) ?? ""
+      apiLog.warning("← \(httpResponse.statusCode) \(path): \(preview)")
       throw APIError.parseErrorResponse(data, statusCode: httpResponse.statusCode)
     }
+    
+    apiLog.debug("← \(httpResponse.statusCode) \(path) (\(data.count) bytes)")
     
     do {
       return try decoder().decode(T.self, from: data)
     } catch {
+      let preview = String(data: data.prefix(500), encoding: .utf8) ?? "<binary>"
+      apiLog.error("❌ Decode \(T.self) from \(path): \(error)\nResponse: \(preview)")
       throw APIError.decodingError(error)
     }
   }
@@ -253,6 +263,7 @@ final class APIService {
       }
     }
     
+    apiLog.debug("→ \(method) \(url.absoluteString)")
     let (data, response): (Data, URLResponse)
     do {
       (data, response) = try await URLSession.shared.data(for: req)
@@ -272,8 +283,12 @@ final class APIService {
     }
     
     guard (200..<300).contains(httpResponse.statusCode) else {
+      let preview = String(data: data.prefix(300), encoding: .utf8) ?? ""
+      apiLog.warning("← \(httpResponse.statusCode) \(path): \(preview)")
       throw APIError.parseErrorResponse(data, statusCode: httpResponse.statusCode)
     }
+    
+    apiLog.debug("← \(httpResponse.statusCode) \(path) (\(data.count) bytes)")
   }
   
   // MARK: - Projects
@@ -1972,6 +1987,7 @@ final class APIService {
       req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     
+    apiLog.debug("→ \(method) \(url.absoluteString)")
     let (data, response): (Data, URLResponse)
     do {
       (data, response) = try await URLSession.shared.data(for: req)
@@ -1990,8 +2006,12 @@ final class APIService {
     }
     
     guard (200..<300).contains(httpResponse.statusCode) else {
+      let preview = String(data: data.prefix(300), encoding: .utf8) ?? ""
+      apiLog.warning("← \(httpResponse.statusCode) \(path): \(preview)")
       throw APIError.parseErrorResponse(data, statusCode: httpResponse.statusCode)
     }
+    
+    apiLog.debug("← \(httpResponse.statusCode) \(path) (\(data.count) bytes)")
     
     // Handle null response (no analysis yet)
     if data.count <= 4 { // "null" is 4 bytes
