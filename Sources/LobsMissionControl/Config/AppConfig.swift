@@ -18,7 +18,7 @@ struct AppConfig: Codable {
     
     init(
         onboardingComplete: Bool = false,
-        serverURL: String = "http://localhost:8000",
+        serverURL: String = "http://localhost:18789",
         apiToken: String? = nil,
         settings: UserSettings = UserSettings()
     ) {

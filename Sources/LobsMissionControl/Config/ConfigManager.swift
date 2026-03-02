@@ -50,7 +50,7 @@ class ConfigManager {
                     let legacyUrl = legacy.controlRepoUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
                     let serverURL = (legacyUrl?.hasPrefix("http://") == true || legacyUrl?.hasPrefix("https://") == true)
                       ? legacyUrl!
-                      : "http://localhost:8000"
+                      : "http://localhost:18789"
 
                     let migrated = AppConfig(
                         onboardingComplete: legacy.onboardingComplete ?? false,
