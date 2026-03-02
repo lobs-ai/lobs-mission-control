@@ -86,7 +86,7 @@ struct IntelligenceView: View {
   
   private var groupedInitiatives: [(String, [InitiativeReviewItem])] {
     let grouped = Dictionary(grouping: filteredInitiatives) { $0.status }
-    let order = ["lobs_review", "pending", "approved", "deferred", "rejected"]
+    let order = ["proposed", "lobs_review", "pending_review", "pending", "approved", "deferred", "rejected"]
     return order.compactMap { status in
       guard let items = grouped[status], !items.isEmpty else { return nil }
       return (status, items)
