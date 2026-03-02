@@ -54,12 +54,14 @@ class KnowledgeService: ObservableObject {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             decoder.dateDecodingStrategy = .iso8601
             
+            print("[Knowledge] Decoding feed response: \(data.count) bytes")
+            if let preview = String(data: data.prefix(200), encoding: .utf8) { print("[Knowledge] Body: \(preview)") }
             let feedResponse = try decoder.decode(KnowledgeFeedResponse.self, from: data)
-            ksLog.info("✅ Feed loaded: \(feedResponse.entries.count) entries")
+            print("[Knowledge] ✅ Feed loaded: \(feedResponse.entries.count) entries")
             feedEntries = feedResponse.entries
             isLoading = false
         } catch {
-            ksLog.error("❌ Knowledge feed error: \(error)")
+            print("[Knowledge] ❌ Feed error: \(error)")
             self.error = error.localizedDescription
             isLoading = false
         }
