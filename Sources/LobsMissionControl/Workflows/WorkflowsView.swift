@@ -177,7 +177,7 @@ private struct WorkflowRow: View {
             }
 
             HStack(spacing: 8) {
-                Label("\(workflow.nodeCount)", systemImage: "circle.grid.3x3")
+                Label("\(workflow.nodeCount ?? workflow.nodes.count)", systemImage: "circle.grid.3x3")
                     .font(.caption)
                     .foregroundColor(.secondary)
 

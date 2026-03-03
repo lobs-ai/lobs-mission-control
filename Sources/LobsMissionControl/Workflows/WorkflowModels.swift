@@ -12,7 +12,7 @@ struct WorkflowDefinition: Codable, Identifiable, Hashable {
     let trigger: WorkflowTrigger?
     let metadata: WorkflowMetadata?
     let isActive: Bool
-    let nodeCount: Int
+    let nodeCount: Int?
     let createdAt: String?
     let updatedAt: String?
 

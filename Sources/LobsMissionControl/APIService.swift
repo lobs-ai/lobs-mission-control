@@ -152,6 +152,9 @@ final class APIService {
       // Try without timezone with fractional seconds
       noTZ.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
       if let date = noTZ.date(from: str) { return date }
+      // SQLite datetime('now') format: space separator, no T
+      noTZ.dateFormat = "yyyy-MM-dd HH:mm:ss"
+      if let date = noTZ.date(from: str) { return date }
       throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date: \(str)")
     }
     return d
